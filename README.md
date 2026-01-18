@@ -1,6 +1,12 @@
-# Repowire
+<div align="center">
+  <picture>
+    <source srcset="./images/logo-dark.webp" media="(prefers-color-scheme: dark)" width="150" height="150" />
+    <img src="./images/logo-light.webp" alt="Repowire Logo" width="150" height="150" />
+  </picture>
 
-Mesh network for AI coding agents (Claude Code, OpenCode) - enables sessions to communicate.
+  <h1>Repowire</h1>
+  <p>Mesh network for AI coding agents (Claude Code, OpenCode) - enables sessions to communicate.</p>
+</div>
 
 ## Quick Start
 
