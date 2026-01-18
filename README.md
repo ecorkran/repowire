@@ -1,7 +1,7 @@
 <div align="center">
   <picture>
-    <source srcset="./images/logo-dark.webp" media="(prefers-color-scheme: dark)" width="150" height="150" />
-    <img src="./images/logo-light.webp" alt="Repowire Logo" width="150" height="150" />
+    <source srcset="https://raw.githubusercontent.com/prassanna-ravishankar/repowire/main/images/logo-dark.webp" media="(prefers-color-scheme: dark)" width="150" height="150" />
+    <img src="https://raw.githubusercontent.com/prassanna-ravishankar/repowire/main/images/logo-light.webp" alt="Repowire Logo" width="150" height="150" />
   </picture>
 
   <h1>Repowire</h1>
