@@ -155,7 +155,7 @@ class ClaudemuxBackend(Backend):
                     return PeerStatus.OFFLINE
 
             return PeerStatus.ONLINE
-        except libtmux.exc.LibTmuxException:
+        except (libtmux.exc.LibTmuxException, libtmux.exc.ObjectDoesNotExist):
             return PeerStatus.OFFLINE
 
     def install(self, dev: bool = False, **kwargs) -> None:
