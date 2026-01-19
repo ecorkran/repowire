@@ -63,10 +63,9 @@ def serve(host: str, port: int, relay: bool, backend: str | None) -> None:
 @click.option(
     "--backend", type=click.Choice(["claudemux", "opencode"]), help="Backend to configure"
 )
-def setup(dev: bool, backend: str | None) -> None:
-    """One-time setup: install hooks/plugins and configure MCP server."""
-    import subprocess
-
+@click.option("--no-service", is_flag=True, help="Skip daemon service installation")
+def setup(dev: bool, backend: str | None, no_service: bool) -> None:
+    """One-time setup: install hooks/plugins, MCP server, and daemon service."""
     from repowire.config.models import load_config
 
     config = load_config()
@@ -97,8 +96,154 @@ def setup(dev: bool, backend: str | None) -> None:
     elif backend == "opencode":
         _setup_opencode(dev=dev)
 
+    # Install daemon as system service
+    if not no_service:
+        from repowire.service.installer import get_platform, install_service
+
+        platform = get_platform()
+        if platform != "unsupported":
+            success, message = install_service(backend)
+            if success:
+                console.print(f"[green]✓[/] Daemon service installed ({platform})")
+            else:
+                console.print(f"[yellow]![/] Service install failed: {message}")
+                console.print("    You can run 'repowire serve' manually instead.")
+        else:
+            console.print("[dim]Skipping service install (unsupported platform)[/]")
+
     console.print("")
-    console.print(f"[green]Setup complete![/] Restart your IDE to use Repowire.")
+    console.print("[green]Setup complete![/]")
+    if no_service:
+        console.print("Run 'repowire serve' to start the daemon manually.")
+    else:
+        console.print("Daemon is running. Restart your IDE to use Repowire.")
+
+
+@main.command()
+def uninstall() -> None:
+    """Remove all repowire components: hooks, MCP server, and daemon service."""
+    from repowire.config.models import load_config
+    from repowire.service.installer import get_platform, get_service_status, uninstall_service
+
+    config = load_config()
+    backend = config.daemon.backend or "claudemux"
+
+    console.print("[cyan]Uninstalling repowire...[/]")
+
+    # Uninstall daemon service
+    status = get_service_status()
+    if status.get("installed"):
+        success, message = uninstall_service()
+        if success:
+            console.print("[green]✓[/] Daemon service removed")
+        else:
+            console.print(f"[yellow]![/] {message}")
+    else:
+        console.print("[dim]Daemon service not installed[/]")
+
+    # Uninstall backend-specific components
+    if backend == "claudemux":
+        _uninstall_claudemux()
+    elif backend == "opencode":
+        _uninstall_opencode()
+
+    console.print("")
+    console.print("[green]Uninstall complete![/]")
+
+
+def _uninstall_claudemux() -> None:
+    """Uninstall claudemux backend components."""
+    import subprocess
+
+    from repowire.hooks.installer import uninstall_hooks
+
+    # Remove hooks
+    try:
+        uninstall_hooks()
+        console.print("[green]✓[/] Claude Code hooks removed")
+    except Exception as e:
+        console.print(f"[yellow]![/] Failed to remove hooks: {e}")
+
+    # Remove MCP server
+    result = subprocess.run(
+        ["claude", "mcp", "remove", "repowire"],
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        console.print("[green]✓[/] MCP server removed from Claude")
+    else:
+        console.print("[dim]MCP server was not registered[/]")
+
+
+def _uninstall_opencode() -> None:
+    """Uninstall opencode backend components."""
+    from repowire.backends import get_backend
+
+    try:
+        backend = get_backend("opencode")
+        backend.uninstall()
+        console.print("[green]✓[/] OpenCode plugin removed")
+    except Exception as e:
+        console.print(f"[yellow]![/] Failed to remove OpenCode plugin: {e}")
+
+
+@main.command()
+def status() -> None:
+    """Show repowire installation and daemon status."""
+    import httpx
+
+    from repowire.config.models import load_config
+    from repowire.hooks.installer import check_hooks_installed
+    from repowire.service.installer import get_platform, get_service_status
+
+    config = load_config()
+    backend = config.daemon.backend or "claudemux"
+
+    console.print(f"[cyan]Backend:[/] {backend}")
+    console.print(f"[cyan]Platform:[/] {get_platform()}")
+    console.print("")
+
+    # Check hooks (claudemux)
+    if backend == "claudemux":
+        if check_hooks_installed():
+            console.print("[green]✓[/] Hooks installed")
+        else:
+            console.print("[yellow]✗[/] Hooks not installed")
+
+    # Check daemon service
+    svc_status = get_service_status()
+    if svc_status.get("installed"):
+        if svc_status.get("running"):
+            pid = svc_status.get("pid")
+            pid_str = f" (PID {pid})" if pid else ""
+            console.print(f"[green]✓[/] Daemon service running{pid_str}")
+        else:
+            console.print("[yellow]✗[/] Daemon service installed but not running")
+    else:
+        console.print("[dim]✗[/] Daemon service not installed")
+
+    # Check daemon HTTP endpoint
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(f"{_get_daemon_url()}/health")
+            resp.raise_for_status()
+            data = resp.json()
+            console.print(f"[green]✓[/] Daemon responding at {_get_daemon_url()}")
+    except httpx.ConnectError:
+        console.print(f"[yellow]✗[/] Daemon not responding at {_get_daemon_url()}")
+    except Exception:
+        console.print(f"[yellow]✗[/] Daemon error at {_get_daemon_url()}")
+
+    # Show peers
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(f"{_get_daemon_url()}/peers")
+            resp.raise_for_status()
+            peers = resp.json().get("peers", [])
+            online = [p for p in peers if p.get("status") == "online"]
+            console.print(f"[cyan]Peers:[/] {len(online)} online, {len(peers)} total")
+    except Exception:
+        pass
 
 
 def _detect_backend() -> str | None:
@@ -176,7 +321,7 @@ def mcp() -> None:
 # =============================================================================
 
 
-@main.group()
+@main.group(hidden=True)
 def claudemux() -> None:
     """Manage Claude Code hooks (claudemux backend)."""
     pass
@@ -225,7 +370,7 @@ def claudemux_status() -> None:
 # =============================================================================
 
 
-@main.group()
+@main.group(hidden=True)
 def opencode() -> None:
     """Manage OpenCode plugin (opencode backend)."""
     pass
@@ -473,7 +618,7 @@ def peer_ask(name: str, query: str, timeout: int) -> None:
 # =============================================================================
 
 
-@main.group()
+@main.group(hidden=True)
 def hooks() -> None:
     """Manage Claude Code hooks (alias for 'claudemux')."""
     pass
@@ -605,7 +750,7 @@ def daemon_status() -> None:
         console.print("[yellow]Daemon is not responding properly.[/]")
 
 
-@main.group()
+@main.group(hidden=True)
 def relay() -> None:
     """Manage the relay server."""
     pass
@@ -648,7 +793,7 @@ def relay_generate_key(user_id: str, name: str) -> None:
 # =============================================================================
 
 
-@main.group()
+@main.group(hidden=True)
 def service() -> None:
     """Manage repowire daemon as a system service."""
     pass
@@ -720,7 +865,7 @@ def service_status() -> None:
         console.print("[yellow]Status: Installed but not running[/]")
 
 
-@main.group()
+@main.group(hidden=True)
 def config() -> None:
     """Manage Repowire configuration."""
     pass

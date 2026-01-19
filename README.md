@@ -20,11 +20,11 @@ pip install "repowire[claudemux]"
 ## Quick Start
 
 ```bash
-# One-time setup (installs hooks + MCP server)
+# One-time setup (installs hooks, MCP server, and daemon service)
 repowire setup
 
-# Start daemon
-repowire serve
+# Check status
+repowire status
 
 # Start Claude in tmux windows - peers auto-register via SessionStart hook
 tmux new-window -n alice
@@ -33,6 +33,8 @@ cd ~/projects/frontend && claude
 tmux new-window -n bob
 cd ~/projects/backend && claude
 ```
+
+The daemon runs as a system service (launchd on macOS, systemd on Linux) and starts automatically on login.
 
 Alice and Bob can now talk:
 ```
@@ -111,33 +113,22 @@ Note: Peers auto-register via SessionStart hook. Your response to `ask_peer` que
 ## CLI Commands
 
 ```bash
-# Peer management
-repowire peer list                          # List peers and status
-repowire peer register NAME -t TMUX -p PATH # Register a peer (claudemux)
-repowire peer register NAME -u URL -p PATH  # Register a peer (opencode)
-repowire peer unregister NAME               # Remove a peer
-repowire peer ask NAME "query"              # Test: ask a peer
-
-# Backend-specific hook/plugin management
-repowire claudemux install                  # Install Claude Code hooks
-repowire claudemux uninstall                # Remove hooks
-repowire claudemux status                   # Check installation
-repowire opencode install                   # Install OpenCode plugin
-repowire opencode status                    # Check installation
+# Main commands
+repowire setup                    # Install everything (hooks, MCP, daemon service)
+repowire setup --no-service       # Skip daemon service (use 'serve' manually)
+repowire status                   # Show installation and daemon status
+repowire uninstall                # Remove all components
 
 # Daemon
-repowire serve                              # Start daemon (default backend)
-repowire serve --backend claudemux          # Start with specific backend
-repowire serve --backend opencode           # Start with OpenCode backend
+repowire serve                    # Start daemon manually (foreground)
+repowire serve --backend opencode # Start with specific backend
 
-# Relay server (self-hosted)
-repowire relay start --port 8000            # Start relay server
-repowire relay generate-key                 # Generate API key
-
-# Configuration
-repowire config show                        # Show current config
-repowire config path                        # Show config file path
+# Peer management
+repowire peer list                # List peers and status
+repowire peer ask NAME "query"    # Test: ask a peer a question
 ```
+
+Advanced commands are available but hidden from help: `claudemux`, `opencode`, `service`, `config`, `relay`.
 
 ## Multi-Machine Setup
 
@@ -203,14 +194,12 @@ peers:
 
 ## Testing the Flow
 
-Use tmux MCP to set up test peers:
-
-1. Start daemon: `repowire serve &`
-2. Create windows for alice and bob via `tmux-mcp create-window`
-3. In each window, run: `cd ~/development/projects/<some-project> && claude`
-4. Verify with `repowire peer list` - peers show as folder names (e.g., `a2a-chat`)
-5. In alice's session: "Ask a2a-chat what this project does"
-6. Clean up: kill the tmux windows via `tmux-mcp kill-window`
+1. Run setup: `repowire setup`
+2. Check status: `repowire status` (daemon should be running)
+3. Create tmux windows for test peers
+4. In each window: `cd ~/projects/<some-project> && claude`
+5. Verify peers: `repowire peer list` - shows folder names as peer names
+6. In one session: "Ask <peer-name> what this project does"
 
 Note: Peer name = folder name, not tmux window name.
 
