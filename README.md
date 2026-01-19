@@ -9,7 +9,7 @@
 </div>
 
 <details>
-<summary>💡 <strong>Why I built this</strong></summary>
+<summary><h2>💡 Why I built this</h2></summary>
 
 I work on projects that span multiple repos. Microservices, infra + app code, frontend + backend. You know how it goes. And I've been using Claude Code a lot. It's great, but it works in isolation. One repo, one session.
 
