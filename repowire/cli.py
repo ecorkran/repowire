@@ -643,6 +643,83 @@ def relay_generate_key(user_id: str, name: str) -> None:
     console.print("[yellow]Save this key - it won't be shown again![/]")
 
 
+# =============================================================================
+# service command group - system service management
+# =============================================================================
+
+
+@main.group()
+def service() -> None:
+    """Manage repowire daemon as a system service."""
+    pass
+
+
+@service.command(name="install")
+@click.option("--backend", type=click.Choice(["claudemux", "opencode"]), help="Backend to use")
+def service_install(backend: str | None) -> None:
+    """Install repowire daemon as a system service (launchd/systemd)."""
+    from repowire.service.installer import get_platform, install_service
+
+    platform = get_platform()
+    if platform == "unsupported":
+        console.print("[red]Unsupported platform for service installation.[/]")
+        console.print("Supported: macOS (launchd), Linux (systemd)")
+        return
+
+    console.print(f"[cyan]Installing repowire service ({platform})...[/]")
+
+    success, message = install_service(backend)
+
+    if success:
+        console.print(f"[green]{message}[/]")
+        console.print("")
+        console.print("The daemon will now start automatically on login.")
+        console.print("Logs: ~/.repowire/daemon.log")
+    else:
+        console.print(f"[red]{message}[/]")
+
+
+@service.command(name="uninstall")
+def service_uninstall() -> None:
+    """Uninstall repowire daemon system service."""
+    from repowire.service.installer import uninstall_service
+
+    success, message = uninstall_service()
+
+    if success:
+        console.print(f"[green]{message}[/]")
+    else:
+        console.print(f"[yellow]{message}[/]")
+
+
+@service.command(name="status")
+def service_status() -> None:
+    """Check if repowire daemon service is installed and running."""
+    from repowire.service.installer import get_platform, get_service_status
+
+    platform = get_platform()
+    status = get_service_status()
+
+    if status.get("error"):
+        console.print(f"[red]{status['error']}[/]")
+        return
+
+    console.print(f"[cyan]Platform:[/] {platform}")
+    console.print(f"[cyan]Service path:[/] {status.get('path', 'N/A')}")
+
+    if not status.get("installed"):
+        console.print("[yellow]Status: Not installed[/]")
+        console.print("Run 'repowire service install' to set up.")
+        return
+
+    if status.get("running"):
+        pid = status.get("pid")
+        pid_str = f" (PID {pid})" if pid else ""
+        console.print(f"[green]Status: Running{pid_str}[/]")
+    else:
+        console.print("[yellow]Status: Installed but not running[/]")
+
+
 @main.group()
 def config() -> None:
     """Manage Repowire configuration."""
