@@ -8,6 +8,42 @@
   <p>Mesh network for AI coding agents - enables Claude Code and OpenCode sessions to communicate.</p>
 </div>
 
+<details>
+<summary><strong>Why I built this</strong></summary>
+
+I work on projects that span multiple repos. Microservices, infra + app code, frontend + backend—you know how it goes. And I've been using Claude Code a lot. It's great, but it works in isolation. One repo, one session.
+
+So what happens when I'm in my `backend` repo and I need to know how the `infra` repo handles deployments? Or when `frontend` needs to understand what API shape `backend` is exposing?
+
+### The janky workarounds
+
+**The superfolder hack.** Clone all your repos into one parent directory and open Claude there. Technically works, but now your repo-specific `CLAUDE.md` files conflict. Your local rules get confused. Skills don't parse right. It's a mess.
+
+**The copy-paste dance.** Open Claude in one repo, ask it to summarize something, copy that into a markdown file or a Jira ticket, then paste it into the other repo's session. It works, but it's tedious. And the context goes stale the moment someone pushes a commit.
+
+### Other approaches people have tried
+
+I'm not the first to tackle this. There's some really interesting work out there:
+
+| Approach | How it works | Tradeoff |
+|----------|--------------|----------|
+| [Memory Bank](https://docs.tinyfat.com/guides/memory-bank/) | Structured directories with persistent markdown files. Human-curated context that survives sessions. | Manual maintenance. Context can go stale. |
+| [claude-cognitive](https://github.com/GMaN1911/claude-cognitive) | Pressure-based "hot/warm/cold" memory. Things used often stay hot, unused things fade. | Complexity. Still async—no real-time communication. |
+| [claude-mem](https://github.com/thedotmack/claude-mem) | Auto-captures session history, compresses with AI, injects into future sessions. | Token overhead. Compressed context may lose nuance. |
+| [Polyrepo MCP](https://blackdoglabs.io/blog/claude-code-decoded-multi-repo-context) | MCP server that loads context across repos intelligently. | Pre-loaded context, not live queries. |
+
+One dev tracked a [227:1 ratio](https://medium.com/@gman1911.gs/i-built-working-memory-for-claude-code-heres-what-happened-in-4-days-657c60712655)—506M tokens consumed vs 2.2M generated. Most of that was Claude re-reading the same files, re-discovering the same architectural decisions, re-learning things it had already understood in previous sessions.
+
+### Where Repowire fits
+
+Those approaches are **async**—they persist context for later use. Repowire is **sync**—live agents talking to each other about current code.
+
+The Claude session in your `backend` repo can literally ask the one in `infra` a question—and get a real answer based on the actual code, not some outdated doc you forgot to update.
+
+They're complementary. Use memory banks for persistent project knowledge. Use Repowire when you need a real answer from another repo's current state.
+
+</details>
+
 ## Installation
 
 **Requirements:** macOS or Linux, Python 3.10+, tmux (for claudemux backend)
