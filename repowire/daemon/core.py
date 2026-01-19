@@ -146,8 +146,13 @@ class PeerManager:
         elif self._backend.name == "opencode" and not peer_config.opencode_url:
             raise ValueError(f"Peer {to_peer} has no opencode_url (required for opencode backend)")
 
-        # Format the query with sender info
-        formatted_query = f"@{from_peer} asks: {text}"
+        # Format the query with sender info and response instructions
+        formatted_query = (
+            f"[Repowire Query from @{from_peer}]\n"
+            f"{text}\n\n"
+            f"IMPORTANT: Respond directly in your message. Do NOT use ask_peer() to reply - "
+            f"your response is automatically captured and returned to {from_peer}."
+        )
 
         return await self._backend.send_query(peer_config, formatted_query, timeout)
 
@@ -173,7 +178,7 @@ class PeerManager:
             raise ValueError(f"Peer {to_peer} has no opencode_url (required for opencode backend)")
 
         # Format the notification with sender info
-        formatted_message = f"@{from_peer} says: {text}"
+        formatted_message = f"[Repowire Notification from @{from_peer}] {text}"
 
         try:
             await self._backend.send_message(peer_config, formatted_message)
@@ -204,7 +209,7 @@ class PeerManager:
         self._config = load_config()
         sent_to: list[str] = []
 
-        formatted_message = f"@{from_peer} broadcasts: {text}"
+        formatted_message = f"[Repowire Broadcast from @{from_peer}] {text}"
 
         for peer_config in self._config.peers.values():
             if peer_config.name in exclude:
