@@ -10,7 +10,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from repowire.config.models import load_config
 from repowire.hooks._tmux import get_tmux_target
 
 DAEMON_URL = os.environ.get("REPOWIRE_DAEMON_URL", "http://127.0.0.1:8377")
@@ -78,6 +77,27 @@ def format_peers_context(peers: list[dict], my_name: str) -> str:
     return "\n".join(lines)
 
 
+def register_peer(peer_name: str, cwd: str, tmux_target: str | None, session_id: str, metadata: dict) -> bool:
+    """Register peer with daemon via HTTP."""
+    try:
+        data = {
+            "name": peer_name,
+            "path": cwd,
+            "tmux_session": tmux_target,
+            "metadata": metadata,
+        }
+        req = urllib.request.Request(
+            f"{DAEMON_URL}/peers",
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=2.0)
+        return True
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError):
+        return False
+
+
 def main() -> int:
     """Main entry point."""
     try:
@@ -89,43 +109,17 @@ def main() -> int:
     session_id = input_data.get("session_id")
     cwd = input_data.get("cwd", os.getcwd())
 
-    config = load_config()
     tmux_target = get_tmux_target()
     peer_name = get_peer_name(cwd)
 
     if event == "SessionStart":
-        # Register or update peer - name is primary key
-        # Include git branch in metadata
+        # Register peer with daemon (includes git branch in metadata)
         metadata = {}
         branch = get_git_branch(cwd)
         if branch:
             metadata["branch"] = branch
 
-        # Try to register via HTTP daemon first for consistency
-        try:
-            data = {
-                "name": peer_name,
-                "path": cwd,
-                "tmux_session": tmux_target,
-                "session_id": session_id,
-                "metadata": metadata,
-            }
-            req = urllib.request.Request(
-                f"{DAEMON_URL}/peers",
-                data=json.dumps(data).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=2.0)
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError):
-            # Fallback to config write on failure (daemon may not be running)
-            config.add_peer(
-                name=peer_name,
-                path=cwd,
-                tmux_session=tmux_target,
-                session_id=session_id,
-                metadata=metadata,
-            )
+        register_peer(peer_name, cwd, tmux_target, session_id, metadata)
 
         # Fetch peers and output context for Claude
         peers = fetch_peers()
@@ -140,11 +134,7 @@ def main() -> int:
                 }
                 print(json.dumps(output))
 
-    elif event == "SessionEnd":
-        # On session end, just clear the session_id but keep the peer
-        # The daemon will clean up stale peers based on tmux status
-        if session_id:
-            config.update_peer_session(peer_name, "")
+    # SessionEnd: no action needed - daemon determines peer status from tmux
 
     return 0
 
