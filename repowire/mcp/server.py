@@ -70,24 +70,16 @@ def create_mcp_server() -> FastMCP:
 
     @mcp.tool()
     async def notify_peer(peer_name: str, message: str) -> str:
-        """Send a notification to a peer (fire-and-forget).
+        """Send an async notification to a peer (fire-and-forget).
 
-        Use this ONLY when you need to proactively share information with another
-        peer without expecting a response. Examples:
-        - Announcing completion of a task that affects other peers
-        - Sharing a status update or warning
-        - Informing about changes to shared resources
-
-        Do NOT use notify_peer to respond to ask_peer queries - your response
-        is automatically captured and returned to the caller.
+        Use for status updates, announcements, or replying to notifications.
 
         Args:
             peer_name: Name of the peer to notify
             message: The notification message
 
         Returns:
-            Correlation ID (format: notif-XXXXXXXX) that the receiving peer can
-            reference in follow-up communications.
+            Correlation ID (format: notif-XXXXXXXX) for tracking.
         """
         my_name = _detect_my_peer_name()
         correlation_id = f"notif-{uuid4().hex[:8]}"

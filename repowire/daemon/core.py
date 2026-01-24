@@ -385,7 +385,11 @@ class PeerManager:
             raise ValueError(f"Peer {to_peer} has no opencode_url (required for opencode backend)")
 
         # Format the notification with sender info
-        formatted_message = f"[Repowire Notification from @{from_peer}] {text}"
+        formatted_message = (
+            f"[Repowire Notification from @{from_peer}]\n"
+            f"{text}\n\n"
+            f"To reply, use notify_peer and include the notification ID for correlation."
+        )
 
         self._add_event("notification", {"from": from_peer, "to": to_peer, "text": text})
 
