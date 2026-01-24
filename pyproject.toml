@@ -61,6 +61,14 @@ build-backend = "hatchling.build"
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "web/node_modules",
+    "web/.next",
+    ".venv",
+    "dist",
+]
+
 [tool.hatch.build.targets.sdist.force-include]
 "web/out" = "web/out"
 
