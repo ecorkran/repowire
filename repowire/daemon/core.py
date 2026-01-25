@@ -6,6 +6,7 @@ import asyncio
 import logging
 import socket
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -15,29 +16,120 @@ from repowire.protocol.peers import Peer, PeerStatus
 
 if TYPE_CHECKING:
     from repowire.backends.base import Backend
+    from repowire.daemon.websocket_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SharedResources:
+    """Shared resources for per-peer backend routing.
+
+    This allows PeerManager to route messages to the appropriate backend
+    based on peer connection type (WebSocket for OpenCode, tmux for claudemux).
+    """
+
+    ws_manager: WebSocketManager
+    claudemux_backend: Backend | None = None
+    opencode_backend: Backend | None = None
+
+    def __post_init__(self) -> None:
+        if self.claudemux_backend is None and self.opencode_backend is None:
+            raise ValueError("At least one backend must be configured")
 
 
 class PeerManager:
     """Manages peer registry and message routing.
 
     Thread-safe with asyncio locks. Delegates actual message
-    delivery to the configured backend.
+    delivery to the appropriate backend based on peer connection type.
     """
 
-    def __init__(self, backend: Backend, config: Config | None = None) -> None:
-        self._backend = backend
+    def __init__(
+        self,
+        backend: Backend | None = None,
+        config: Config | None = None,
+        shared: SharedResources | None = None,
+    ) -> None:
+        """Initialize PeerManager.
+
+        Args:
+            backend: Legacy single-backend mode (deprecated, for backward compat)
+            config: Configuration instance
+            shared: Shared resources for per-peer routing (preferred)
+
+        Raises:
+            ValueError: If neither backend nor shared resources are provided
+        """
+        if backend is None and shared is None:
+            raise ValueError("Either backend or shared resources must be provided")
+
         self._config = config or load_config()
         self._peers: dict[str, Peer] = {}
         self._lock = asyncio.Lock()
         self._machine = socket.gethostname()
         self._events: deque[dict[str, Any]] = deque(maxlen=100)
 
+        # Per-peer routing with shared resources (preferred)
+        self._shared = shared
+
+        # Legacy single-backend mode (backward compatibility)
+        self._backend = backend
+
     @property
     def backend_name(self) -> str:
-        """Get the backend name."""
-        return self._backend.name
+        """Get the backend name (for health check / legacy)."""
+        if self._backend:
+            return self._backend.name
+        # In per-peer mode, report what's available
+        backends = []
+        if self._shared and self._shared.claudemux_backend:
+            backends.append("claudemux")
+        if self._shared and self._shared.opencode_backend:
+            backends.append("opencode")
+        return "+".join(backends) if backends else "none"
+
+    def _get_backend_for_peer(self, peer_config: PeerConfig) -> Backend:
+        """Get appropriate backend for peer based on connection type.
+
+        Args:
+            peer_config: Peer configuration
+
+        Returns:
+            Backend instance to use for this peer
+
+        Raises:
+            ValueError: If no backend available for this peer
+        """
+        peer_name = peer_config.name
+
+        # Per-peer routing mode (preferred)
+        if self._shared:
+            # Check WebSocket first (OpenCode peers)
+            if self._shared.ws_manager.is_connected(peer_name):
+                if self._shared.opencode_backend:
+                    return self._shared.opencode_backend
+                raise ValueError(
+                    f"Peer {peer_name} connected via WebSocket but opencode backend unavailable"
+                )
+
+            # Check tmux session (claudemux peers)
+            if peer_config.tmux_session:
+                if self._shared.claudemux_backend:
+                    return self._shared.claudemux_backend
+                raise ValueError(
+                    f"Peer {peer_name} has tmux session but claudemux backend unavailable"
+                )
+
+            raise ValueError(
+                f"No backend for peer {peer_name}: not connected via WebSocket or tmux"
+            )
+
+        # Legacy single-backend mode
+        if self._backend:
+            return self._backend
+
+        raise ValueError("No backend configured")
 
     def _add_event(self, type: str, data: dict[str, Any]) -> str:
         """Add an event to the history. Returns event ID."""
@@ -65,12 +157,24 @@ class PeerManager:
         return list(self._events)
 
     async def start(self) -> None:
-        """Start the peer manager and backend."""
-        await self._backend.start()
+        """Start the peer manager and backend(s)."""
+        if self._shared:
+            if self._shared.claudemux_backend:
+                await self._shared.claudemux_backend.start()
+            if self._shared.opencode_backend:
+                await self._shared.opencode_backend.start()
+        elif self._backend:
+            await self._backend.start()
 
     async def stop(self) -> None:
-        """Stop the peer manager and backend."""
-        await self._backend.stop()
+        """Stop the peer manager and backend(s)."""
+        if self._shared:
+            if self._shared.claudemux_backend:
+                await self._shared.claudemux_backend.stop()
+            if self._shared.opencode_backend:
+                await self._shared.opencode_backend.stop()
+        elif self._backend:
+            await self._backend.stop()
 
     async def register_peer(self, peer: Peer) -> None:
         """Register a peer in the mesh."""
@@ -92,6 +196,33 @@ class PeerManager:
         async with self._lock:
             return self._peers.get(name)
 
+    def _get_peer_status(self, peer_config: PeerConfig) -> PeerStatus:
+        """Get status of a peer from the appropriate backend.
+
+        Args:
+            peer_config: Peer configuration
+
+        Returns:
+            Peer status
+        """
+        # Per-peer routing mode
+        if self._shared:
+            # Check WebSocket first (OpenCode peers)
+            if self._shared.ws_manager.is_connected(peer_config.name):
+                return self._shared.ws_manager.get_peer_status(peer_config.name)
+
+            # Check tmux session (claudemux peers)
+            if peer_config.tmux_session and self._shared.claudemux_backend:
+                return self._shared.claudemux_backend.get_peer_status(peer_config)
+
+            return PeerStatus.OFFLINE
+
+        # Legacy single-backend mode
+        if self._backend:
+            return self._backend.get_peer_status(peer_config)
+
+        return PeerStatus.OFFLINE
+
     async def get_all_peers(self) -> list[Peer]:
         """Get all registered peers."""
         # Reload config for fresh peer info
@@ -111,7 +242,7 @@ class PeerManager:
             if peer_config.name in seen:
                 # Use locally registered peer, but verify status with backend
                 peer = local_peers[peer_config.name]
-                backend_status = self._backend.get_peer_status(peer_config)
+                backend_status = self._get_peer_status(peer_config)
                 # If backend says offline but we think online/busy, trust backend
                 if backend_status == PeerStatus.OFFLINE and peer.status != PeerStatus.OFFLINE:
                     peer.status = PeerStatus.OFFLINE
@@ -120,7 +251,7 @@ class PeerManager:
                 result.append(peer)
             else:
                 # Build peer from config
-                status = self._backend.get_peer_status(peer_config)
+                status = self._get_peer_status(peer_config)
                 result.append(
                     Peer(
                         name=peer_config.name,
@@ -187,6 +318,93 @@ class PeerManager:
                     return True
             return False
 
+    async def set_peer_circle(self, name: str, circle: str) -> bool:
+        """Set a peer's circle for cross-backend communication.
+
+        Updates both in-memory peer and persistent config atomically.
+
+        Args:
+            name: Name of the peer
+            circle: Circle to join
+
+        Returns:
+            True if peer was found and updated
+        """
+        async with self._lock:
+            updated = False
+
+            # Update in-memory peer
+            if name in self._peers:
+                self._peers[name].circle = circle
+                updated = True
+
+            # Update config (persistent) - protected by lock to prevent race
+            self._config = load_config()
+            peer_config = self._config.get_peer(name)
+            if peer_config:
+                peer_config.circle = circle
+                self._config.save()
+                updated = True
+
+            if updated:
+                logger.info(f"Peer {name} joined circle: {circle}")
+            else:
+                logger.warning(f"Failed to update circle for {name}: peer not found")
+
+            return updated
+
+    async def update_peer_session_id(self, name: str, session_id: str) -> bool:
+        """Update a peer's session ID.
+
+        Updates persistent config atomically.
+
+        Args:
+            name: Name of the peer
+            session_id: New session ID
+
+        Returns:
+            True if peer was found and updated
+        """
+        async with self._lock:
+            self._config = load_config()
+            peer_config = self._config.get_peer(name)
+            if peer_config:
+                peer_config.session_id = session_id
+                self._config.save()
+                return True
+            logger.warning(f"Peer {name} not in config, session_id not persisted")
+            return False
+
+    async def register_peer_with_config(
+        self,
+        peer: Peer,
+        path: str,
+        opencode_url: str | None = None,
+        circle: str | None = None,
+    ) -> None:
+        """Register a peer in both memory and config atomically.
+
+        Args:
+            peer: The peer to register
+            path: Working directory path
+            opencode_url: Optional OpenCode URL marker
+            circle: Optional circle name
+        """
+        async with self._lock:
+            # Update in-memory
+            peer.status = PeerStatus.ONLINE
+            peer.last_seen = datetime.now(timezone.utc)
+            self._peers[peer.name] = peer
+
+            # Update config (atomic with memory update)
+            self._config = load_config()
+            self._config.add_peer(
+                name=peer.name,
+                path=path,
+                opencode_url=opencode_url,
+                circle=circle,
+            )
+
     async def mark_offline(self, name: str) -> int:
         """Mark a peer as offline and cancel pending queries to it.
 
@@ -201,12 +419,39 @@ class PeerManager:
             if name in self._peers:
                 self._peers[name].status = PeerStatus.OFFLINE
 
-        # Cancel pending queries to this peer
+        # Cancel pending queries to this peer (check all available backends)
         cancelled = 0
-        if hasattr(self._backend, "cancel_queries_to_peer"):
-            cancelled = self._backend.cancel_queries_to_peer(name)  # type: ignore[call-non-callable]
+
+        if self._shared:
+            if self._shared.claudemux_backend:
+                cancelled += await self._shared.claudemux_backend.cancel_queries_to_peer(name)
+            if self._shared.opencode_backend:
+                cancelled += await self._shared.opencode_backend.cancel_queries_to_peer(name)
+        elif self._backend:
+            cancelled = await self._backend.cancel_queries_to_peer(name)
 
         return cancelled
+
+    def resolve_hook_response(self, correlation_id: str, response: str) -> bool:
+        """Resolve a pending query with a response from a hook.
+
+        This is called by the Stop hook (claudemux) to send back responses.
+
+        Args:
+            correlation_id: The correlation ID of the pending query
+            response: The response text
+
+        Returns:
+            True if the query was found and resolved
+        """
+        # Try claudemux backend first (the only one that uses hooks)
+        if self._shared and self._shared.claudemux_backend:
+            return self._shared.claudemux_backend.resolve_query(correlation_id, response)
+        elif self._backend:
+            return self._backend.resolve_query(correlation_id, response)
+
+        logger.warning(f"Cannot resolve hook response {correlation_id}: no backend available")
+        return False
 
     def _get_peer_config(self, name: str) -> PeerConfig | None:
         """Get peer config by name."""
@@ -226,7 +471,24 @@ class PeerManager:
         """
         if peer_config.circle:
             return peer_config.circle
-        return self._backend.derive_circle(peer_config)
+
+        # Per-peer routing mode - derive circle from appropriate backend
+        if self._shared:
+            # WebSocket peers (OpenCode) default to "global"
+            if self._shared.ws_manager.is_connected(peer_config.name):
+                return "global"
+
+            # tmux peers (claudemux) derive from session name
+            if peer_config.tmux_session and self._shared.claudemux_backend:
+                return self._shared.claudemux_backend.derive_circle(peer_config)
+
+            return "global"
+
+        # Legacy single-backend mode
+        if self._backend:
+            return self._backend.derive_circle(peer_config)
+
+        return "global"
 
     def _check_circle_access(self, from_peer: str, to_peer: str, bypass: bool = False) -> None:
         """Check if from_peer can communicate with to_peer.
@@ -291,11 +553,8 @@ class PeerManager:
         # Check circle access
         self._check_circle_access(from_peer, to_peer, bypass_circle)
 
-        # Check backend-specific requirements
-        if self._backend.name == "claudemux" and not peer_config.tmux_session:
-            raise ValueError(f"Peer {to_peer} has no tmux session (required for claudemux backend)")
-        elif self._backend.name == "opencode" and not peer_config.opencode_url:
-            raise ValueError(f"Peer {to_peer} has no opencode_url (required for opencode backend)")
+        # Get appropriate backend for this peer (validates that peer is reachable)
+        backend = self._get_backend_for_peer(peer_config)
 
         # Format the query with sender info and response instructions
         formatted_query = (
@@ -311,7 +570,7 @@ class PeerManager:
         )
 
         try:
-            response = await self._backend.send_query(peer_config, formatted_query, timeout)
+            response = await backend.send_query(peer_config, formatted_query, timeout)
             # Update query event to success
             self._update_event(query_event_id, {"status": "success"})
             self._add_event(
@@ -376,11 +635,8 @@ class PeerManager:
         # Check circle access
         self._check_circle_access(from_peer, to_peer, bypass_circle)
 
-        # Check backend-specific requirements
-        if self._backend.name == "claudemux" and not peer_config.tmux_session:
-            raise ValueError(f"Peer {to_peer} has no tmux session (required for claudemux backend)")
-        elif self._backend.name == "opencode" and not peer_config.opencode_url:
-            raise ValueError(f"Peer {to_peer} has no opencode_url (required for opencode backend)")
+        # Get appropriate backend for this peer (validates that peer is reachable)
+        backend = self._get_backend_for_peer(peer_config)
 
         # Format the notification with sender info
         formatted_message = (
@@ -392,7 +648,7 @@ class PeerManager:
         self._add_event("notification", {"from": from_peer, "to": to_peer, "text": text})
 
         try:
-            await self._backend.send_message(peer_config, formatted_message)
+            await backend.send_message(peer_config, formatted_message)
             return True
         except Exception as e:
             logger.warning(f"Failed to send notification to {to_peer}: {e}")
@@ -438,10 +694,11 @@ class PeerManager:
             if peer_config.name in excluded:
                 continue
 
-            # Check backend-specific requirements
-            if self._backend.name == "claudemux" and not peer_config.tmux_session:
-                continue
-            elif self._backend.name == "opencode" and not peer_config.opencode_url:
+            # Try to get backend for this peer (skips if not reachable)
+            try:
+                backend = self._get_backend_for_peer(peer_config)
+            except ValueError:
+                # Peer has no available backend, skip
                 continue
 
             # Filter by circle (unless bypassing)
@@ -450,12 +707,13 @@ class PeerManager:
                 if peer_circle != sender_circle:
                     continue
 
-            status = self._backend.get_peer_status(peer_config)
+            # Check status via appropriate backend
+            status = self._get_peer_status(peer_config)
             if status == PeerStatus.OFFLINE:
                 continue
 
             try:
-                await self._backend.send_message(peer_config, formatted_message)
+                await backend.send_message(peer_config, formatted_message)
                 sent_to.append(peer_config.name)
             except Exception as e:
                 logger.warning(f"Broadcast to {peer_config.name} failed: {e}")

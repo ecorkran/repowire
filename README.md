@@ -42,9 +42,9 @@ Read more about it in my blog where I describe [the context breakout problem](ht
 
 ```bash
 # Install from PyPI
-uv tool install "repowire[claudemux]"
+uv tool install repowire
 # or
-pip install "repowire[claudemux]"
+pip install repowire
 ```
 
 ## Quick Start
@@ -143,47 +143,53 @@ For Claude Code sessions running in tmux. This is the tested, production-ready b
 
 ---
 
-### opencode (experimental)
+### opencode
 
-> ⚠️ **Untested** - Architecture exists but not battle-tested.
-
-For OpenCode sessions using the opencode-ai SDK.
+For OpenCode sessions. Uses a WebSocket plugin that connects to the daemon and injects queries via OpenCode's SDK.
 
 #### What's Installed
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| **Daemon** | System service | Routes messages, `127.0.0.1:8377` |
-| **Plugin** | OpenCode plugins directory | Provides peer tools |
+| **Daemon** | System service | Routes messages via WebSocket, `127.0.0.1:8377` |
+| **Plugin** | `~/.config/opencode/plugin/repowire.ts` | WebSocket client, provides `ask_peer`, `list_peers`, `notify_peer`, `broadcast`, `whoami` tools |
 | **Config** | `~/.repowire/config.yaml` | Peer registry |
 
 <details>
 <summary><strong>Architecture</strong></summary>
 
 ```
-┌─────────────┐                           ┌─────────────┐
-│   Peer A    │    ask_peer("B")          │   Peer B    │
-│             │ ─────────────────────────►│  (OpenCode) │
-│             │                           │             │
-│             │ ◄─────────────────────────│             │
-│             │      response             │             │
-└─────────────┘                           └─────────────┘
-       │                                         ▲
-       │                                         │
-       ▼                                         │
-┌─────────────────────────────────────────────────────┐
-│                      Daemon                          │
-│                                                     │
-│  • Calls OpenCode SDK directly                      │
-│  • SDK returns response (no hooks needed)           │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  OpenCode TUI - User's session                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  repowire plugin (TypeScript)                          │ │
+│  │  • WebSocket connection to daemon                      │ │
+│  │  • Tracks activeSessionId via event hooks              │ │
+│  │  • On query: client.session.prompt(sessionId, text)    │ │
+│  │  • Injects mesh context into system prompt             │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                         ↕ WebSocket ws://127.0.0.1:8377/ws/plugin
+┌─────────────────────────────────────────────────────────────┐
+│                         Daemon                               │
+│  • WebSocket endpoint for plugin connections                │
+│  • Routes queries to target plugin via WebSocket            │
+│  • Correlation ID tracking for request/response matching    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Why simpler?** OpenCode has an SDK with direct API access. No need for hooks or tmux - we can send messages and get responses programmatically.
+**How it works:**
+1. Plugin connects to daemon via WebSocket on startup
+2. Plugin registers peer (name = folder name) and tracks session ID
+3. When query arrives, plugin calls `session.prompt()` to inject into user's chat
+4. Response extracted and sent back via WebSocket
+5. System prompt automatically includes list of online peers
+
+**Why WebSocket?** OpenCode plugins run inside the TUI process. WebSocket provides persistent bidirectional communication without needing external HTTP servers.
 
 </details>
 
-To use: `repowire setup --backend opencode`
+OpenCode support is auto-detected during `repowire setup` when the `opencode` CLI is installed.
 
 ## CLI Reference
 
@@ -196,6 +202,7 @@ repowire uninstall                # Remove all components
 
 # Manual daemon control
 repowire serve                    # Run daemon in foreground
+repowire build-ui                 # Build dashboard (for development)
 
 # Peer commands
 repowire peer list                # List peers and their status
@@ -250,7 +257,7 @@ Config file: `~/.repowire/config.yaml`
 daemon:
   host: "127.0.0.1"
   port: 8377
-  backend: "claudemux"  # or "opencode"
+  # Per-peer routing auto-detects backend based on peer config
 
 relay:
   enabled: false

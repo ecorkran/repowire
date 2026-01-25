@@ -196,6 +196,28 @@ async def mark_peer_offline(
     return OfflineResponse(cancelled_queries=cancelled)
 
 
+class SetCircleRequest(BaseModel):
+    """Request to set peer's circle."""
+
+    peer_name: str = Field(..., min_length=1, description="Peer name")
+    circle: str = Field(..., min_length=1, description="Circle to join")
+
+
+@router.post("/peers/circle", response_model=OkResponse)
+async def set_peer_circle_endpoint(
+    request: SetCircleRequest,
+    _: str | None = Depends(require_auth),
+) -> OkResponse:
+    """Set a peer's circle for cross-backend communication.
+
+    Allows peers to join named circles to communicate with peers from
+    different backends (e.g., claudemux peer joining OpenCode's circle).
+    """
+    peer_manager = get_peer_manager()
+    await peer_manager.set_peer_circle(request.peer_name, request.circle)
+    return OkResponse()
+
+
 # Legacy endpoints for backward compatibility
 
 

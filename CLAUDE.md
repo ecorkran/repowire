@@ -5,11 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Development Commands
 
 ```bash
-# Install dependencies (use --all for both backends)
-pip install -e ".[all]"       # claudemux + opencode
-pip install -e ".[claudemux]" # tmux backend only
-pip install -e ".[opencode]"  # opencode backend only
-pip install -e ".[dev]"       # dev tools (pytest, ruff, mypy)
+# Install dependencies
+pip install -e "."            # core (includes libtmux)
+pip install -e ".[dev]"       # dev tools (pytest, ruff, ty)
+pip install -e ".[relay]"     # relay server deps
 
 # Run tests
 pytest                        # all tests
@@ -23,13 +22,13 @@ uv run ty check repowire/     # type check
 
 # CI runs: ruff check, ty check, pytest (see .github/workflows/ci.yml)
 
-# Start daemon
+# Start daemon (per-peer routing auto-detects backend)
 repowire serve                # default: 127.0.0.1:8377
-repowire serve --backend opencode --port 8080
+repowire serve --port 8080
 
-# Setup (installs hooks + MCP server)
+# Setup (auto-detects and configures all available backends)
 repowire setup --dev          # dev mode (uses local code)
-repowire setup --backend claudemux
+repowire setup                # production mode
 ```
 
 ## Dashboard & Observability
@@ -84,9 +83,9 @@ Repowire is a mesh network enabling Claude Code sessions to communicate. It has 
 │   ClaudemuxBackend      │     │    OpencodeBackend      │
 │   (backends/claudemux/) │     │   (backends/opencode/)  │
 │                         │     │                         │
-│ - Uses libtmux          │     │ - Uses opencode-ai SDK  │
-│ - Requires tmux_session │     │ - Requires opencode_url │
-│ - Response via hooks    │     │ - Direct SDK response   │
+│ - Uses libtmux          │     │ - WebSocket plugin      │
+│ - Requires tmux_session │     │ - Plugin injects via SDK│
+│ - Response via hooks    │     │ - Response via WebSocket│
 └─────────────────────────┘     └─────────────────────────┘
 ```
 
@@ -139,7 +138,7 @@ File: `~/.repowire/config.yaml`
 daemon:
   host: "127.0.0.1"
   port: 8377
-  backend: "claudemux"  # or "opencode"
+  # Per-peer routing auto-detects backend based on peer config
 
 relay:  # Experimental - not usable yet
   enabled: false
@@ -210,156 +209,12 @@ Circles are logical subnets that isolate groups of peers. Peers can only communi
 - Tests use `tempfile` and `unittest.mock` extensively
 - No integration tests yet (directory exists at `tests/integration/`)
 
-## Dev Workflow: Integration Testing (Claudemux)
+## Integration Testing
 
-This workflow tests the **claudemux backend** - tmux-based peer communication for Claude Code sessions. This is the primary local development workflow.
+Use the `/integration-test` skill for end-to-end testing. It supports three modes:
 
-> **Note:** The opencode backend has a simpler flow since the SDK returns responses directly (no hooks/tmux needed). For opencode testing, peers just need `opencode_url` configured and an OpenCode server running.
+- **claudemux**: Test Claude Code sessions via tmux hooks
+- **opencode**: Test OpenCode sessions via WebSocket plugin
+- **mixed**: Test cross-backend communication (Claude Code ↔ OpenCode)
 
-### Prerequisites
-
-1. **Ask the user for two test projects** - Need two separate git repos/folders to use as test peers. Example prompt:
-   > "I need two project directories to test repowire peer communication. Which two folders should I use? (They'll each run a Claude Code session that can talk to each other)"
-
-2. **Ensure claudemux backend is set up**:
-   ```bash
-   repowire setup --dev --backend claudemux
-   ```
-
-### Step-by-Step Workflow
-
-#### 1. Check/Create tmux Session
-
-```bash
-# Check if tmux is running
-tmux list-sessions 2>/dev/null || echo "No tmux sessions"
-
-# If no session exists, create one
-tmux new-session -d -s repowire-test
-
-# Attach to existing or new session
-tmux attach -t repowire-test
-```
-
-#### 2. Create Test Windows
-
-```bash
-# Create two windows for test peers (from within tmux or using tmux commands)
-tmux new-window -t repowire-test -n alice
-tmux new-window -t repowire-test -n bob
-```
-
-#### 3. Start the Daemon
-
-In a separate terminal or tmux pane:
-```bash
-repowire serve
-# or for dev: uv run repowire serve
-```
-
-Verify it's running:
-```bash
-curl -s http://127.0.0.1:8377/health
-# Should return: {"status":"ok","version":"0.1.0","backend":"claudemux",...}
-```
-
-#### 4. Launch Claude Sessions in Each Window
-
-**Window "alice":**
-```bash
-tmux send-keys -t repowire-test:alice "cd /path/to/project-a && claude" Enter
-```
-
-**Window "bob":**
-```bash
-tmux send-keys -t repowire-test:bob "cd /path/to/project-b && claude" Enter
-```
-
-The SessionStart hook will auto-register each peer using the folder name.
-
-#### 5. Verify Peer Registration
-
-```bash
-repowire peer list
-```
-
-Expected output shows both peers with status "online":
-```
-┌─────────────────────────────────────────────────┐
-│ Name       │ Status │ Tmux Session       │ Path │
-├─────────────────────────────────────────────────┤
-│ project-a  │ online │ repowire-test:alice│ ...  │
-│ project-b  │ online │ repowire-test:bob  │ ...  │
-└─────────────────────────────────────────────────┘
-```
-
-#### 6. Test Communication
-
-**Option A: CLI test**
-```bash
-repowire peer ask project-b "What is this project about?"
-```
-
-**Option B: From within a Claude session**
-In alice's Claude session, type:
-> "Ask project-b what their main API endpoints are"
-
-Claude will use the `ask_peer` MCP tool to query the other session.
-
-#### 7. Collaboration Test
-
-Give both sessions a shared task to verify bidirectional communication:
-
-In alice's session:
-> "You're working with a peer called 'project-b'. Ask them what dependencies they use, then tell them what dependencies you use. Coordinate to identify any shared libraries."
-
-### Cleanup
-
-**Important:** Use `tmux kill-window` or `tmux kill-pane` to quit Claude sessions. Sending Ctrl+C via `tmux send-keys` is unreliable and often doesn't work properly.
-
-```bash
-# Kill test windows (preferred method to quit Claude sessions)
-tmux kill-window -t repowire-test:alice
-tmux kill-window -t repowire-test:bob
-
-# Alternative: kill just the pane if window has multiple panes
-# tmux kill-pane -t repowire-test:alice
-
-# Stop daemon
-repowire daemon stop
-# or: curl -X POST http://127.0.0.1:8377/shutdown
-
-# Unregister peers (optional - they'll be cleaned up automatically)
-repowire peer unregister project-a
-repowire peer unregister project-b
-```
-
-### Troubleshooting (Claudemux)
-
-| Issue | Check |
-|-------|-------|
-| Peers not showing up | Verify hooks installed: `repowire claudemux status` |
-| "No tmux session" error | Claude must run inside tmux, not a regular terminal |
-| Query timeout | Check daemon running: `curl http://127.0.0.1:8377/health` |
-| Wrong peer name | Peer name = folder name, not tmux window name |
-| Hook not firing | Check `~/.claude/settings.json` has repowire hooks |
-| Peer stuck as busy | User interrupted (Escape). Wait 60s for idle_prompt, or send any prompt to trigger Stop |
-
-### Quick Verification Script (Claudemux)
-
-```bash
-#!/bin/bash
-# quick-test-claudemux.sh - Verifies claudemux backend functionality
-
-echo "=== Checking daemon ==="
-curl -s http://127.0.0.1:8377/health | jq . || echo "ERROR: Daemon not running!"
-
-echo "=== Checking hooks ==="
-repowire claudemux status
-
-echo "=== Listing peers ==="
-repowire peer list
-
-echo "=== Checking pending queries ==="
-ls -la ~/.repowire/pending/ 2>/dev/null || echo "No pending queries"
-```
+The skill guides you through environment discovery, pre-test teardown, test execution, and final cleanup.

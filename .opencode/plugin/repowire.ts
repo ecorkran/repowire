@@ -1,10 +1,4 @@
-"""OpenCode plugin installer."""
-
-from __future__ import annotations
-
-from pathlib import Path
-
-PLUGIN_CONTENT = '''import type { Plugin, PluginClient } from "@opencode-ai/plugin"
+import type { Plugin, PluginClient } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 
 // Type definitions for event properties
@@ -353,7 +347,7 @@ export const RepowirePlugin: Plugin = async ({ client, directory }) => {
         if (otherPeers.length > 0) {
           const peerList = otherPeers.map((p: PeerInfo) =>
             `  - ${p.name} on ${p.machine || "unknown"} (${p.path || "unknown path"})`
-          ).join("\\n")
+          ).join("\n")
 
           output.system.push(`[Repowire Mesh] You have access to other coding sessions working on related projects:
 ${peerList}
@@ -369,62 +363,3 @@ Peer list may be outdated - use list_peers tool to refresh.`)
     },
   }
 }
-'''
-
-# Plugin file locations
-GLOBAL_PLUGIN_DIR = Path.home() / ".config" / "opencode" / "plugin"
-LOCAL_PLUGIN_DIR = Path(".opencode") / "plugin"
-PLUGIN_FILENAME = "repowire.ts"
-
-
-def _get_plugin_path(global_install: bool) -> Path:
-    """Get the plugin path based on install type."""
-    if global_install:
-        return GLOBAL_PLUGIN_DIR / PLUGIN_FILENAME
-    return LOCAL_PLUGIN_DIR / PLUGIN_FILENAME
-
-
-def install_plugin(global_install: bool = True) -> bool:
-    """Install the OpenCode plugin.
-
-    Args:
-        global_install: If True, install to ~/.config/opencode/plugin/
-                       If False, install to .opencode/plugin/
-
-    Returns:
-        True if installation successful
-    """
-    plugin_path = _get_plugin_path(global_install)
-    plugin_path.parent.mkdir(parents=True, exist_ok=True)
-    plugin_path.write_text(PLUGIN_CONTENT)
-    return True
-
-
-def uninstall_plugin(global_install: bool = True) -> bool:
-    """Uninstall the OpenCode plugin.
-
-    Args:
-        global_install: If True, uninstall from ~/.config/opencode/plugin/
-                       If False, uninstall from .opencode/plugin/
-
-    Returns:
-        True if uninstallation successful
-    """
-    plugin_path = _get_plugin_path(global_install)
-    if plugin_path.exists():
-        plugin_path.unlink()
-    return True
-
-
-def check_plugin_installed(global_install: bool = True) -> bool:
-    """Check if the OpenCode plugin is installed.
-
-    Args:
-        global_install: If True, check ~/.config/opencode/plugin/
-                       If False, check .opencode/plugin/
-
-    Returns:
-        True if plugin is installed
-    """
-    plugin_path = _get_plugin_path(global_install)
-    return plugin_path.exists()
