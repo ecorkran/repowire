@@ -228,9 +228,7 @@ class PeerManager:
             return peer_config.circle
         return self._backend.derive_circle(peer_config)
 
-    def _check_circle_access(
-        self, from_peer: str, to_peer: str, bypass: bool = False
-    ) -> None:
+    def _check_circle_access(self, from_peer: str, to_peer: str, bypass: bool = False) -> None:
         """Check if from_peer can communicate with to_peer.
 
         Args:

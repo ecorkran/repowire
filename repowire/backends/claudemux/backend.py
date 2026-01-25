@@ -54,6 +54,7 @@ class ClaudemuxBackend(Backend):
             raise ValueError(f"Could not find pane for peer {peer.name}")
 
         pane.send_keys(text, enter=True)
+        pane.send_keys("", enter=True)  # Extra Enter for robustness when peer is busy
 
     async def send_query(self, peer: PeerConfig, text: str, timeout: float = 120.0) -> str:
         """Send a query and wait for response via hook callback."""
@@ -82,6 +83,7 @@ class ClaudemuxBackend(Backend):
 
         # Send the query
         pane.send_keys(text, enter=True)
+        pane.send_keys("", enter=True)  # Extra Enter for robustness when peer is busy
 
         try:
             response = await asyncio.wait_for(response_future, timeout=timeout)
