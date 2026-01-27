@@ -268,8 +268,6 @@ def status() -> None:
         pass
 
 
-
-
 def _setup_claudemux(dev: bool = False) -> None:
     """Setup for claudemux backend."""
     import subprocess
@@ -294,7 +292,7 @@ def _setup_claudemux(dev: bool = False) -> None:
     console.print("[green]✓[/] MCP server added to Claude")
 
 
-def _setup_opencode(dev: bool = False, global_install: bool = False) -> None:
+def _setup_opencode(dev: bool = False, global_install: bool = True) -> None:
     """Setup for opencode backend."""
     from repowire.backends import get_backend
 
@@ -312,6 +310,17 @@ def mcp() -> None:
     from repowire.mcp.server import run_mcp_server
 
     asyncio.run(run_mcp_server())
+
+
+@main.command()
+@click.option("--host", default=DEFAULT_HOST, help="Daemon host")
+@click.option("--port", default=DEFAULT_PORT, type=int, help="Daemon port")
+def top(host: str, port: int) -> None:
+    """Launch htop-style TUI for managing peers."""
+    from repowire.tui.app import run_tui
+
+    daemon_url = f"http://{host}:{port}"
+    run_tui(daemon_url=daemon_url)
 
 
 # =============================================================================
@@ -498,6 +507,58 @@ def peer_list() -> None:
         )
 
     console.print(table)
+
+
+@peer.command(name="new")
+@click.argument("path", type=click.Path(exists=True), default=".")
+@click.option("--backend", "-b", type=click.Choice(["claudemux", "opencode"]), default="claudemux")
+@click.option("--command", "-c", "cmd", help="Command to run (default: claude or opencode)")
+@click.option("--circle", help="Circle (defaults to 'default')")
+def peer_new(path: str, backend: str, cmd: str | None, circle: str | None) -> None:  # noqa: ARG001
+    """Spawn a new peer in a tmux window.
+
+    Examples:
+
+        repowire peer new ~/git/myproject
+
+        repowire peer new . --command="claude --dangerously-skip-permissions"
+
+        repowire peer new ~/git/api --backend=opencode --circle=backend
+    """
+    from typing import cast
+
+    from repowire.config.models import BackendType
+    from repowire.spawn import SpawnConfig, spawn_peer
+
+    actual_path = str(Path(path).resolve())
+    actual_circle = circle or "default"
+    actual_cmd = cmd or ("claude" if backend == "claudemux" else "opencode")
+    backend_type = cast(BackendType, backend)
+
+    config = SpawnConfig(
+        path=actual_path,
+        circle=actual_circle,
+        backend=backend_type,
+        command=actual_cmd,
+    )
+
+    try:
+        result = spawn_peer(config)
+        console.print(
+            f"[green]✓[/] Spawned [cyan]{result.display_name}[/] "
+            f"in circle [magenta]{actual_circle}[/]"
+        )
+        console.print(f"  tmux: {result.tmux_session}")
+        console.print(f"  command: {actual_cmd}")
+
+        if not result.registered:
+            console.print("[dim]  (daemon not running - will auto-register)[/]")
+
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/]")
+    except Exception as e:
+        err_msg = str(e) if str(e) else type(e).__name__
+        console.print(f"[red]Failed to spawn: {err_msg}[/]")
 
 
 @peer.command(name="register")
