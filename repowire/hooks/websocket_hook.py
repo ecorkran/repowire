@@ -51,17 +51,26 @@ def get_display_name_from_cwd() -> str:
 def _tmux_send_keys(pane_id: str, text: str) -> bool:
     """Send keys to a tmux pane via subprocess.
 
-    Sends text literally then Enter separately to ensure
-    Claude Code TUI properly receives the submission.
+    Uses tmux literal mode (-l) for the text, then explicitly sends the
+    "end bracketed paste" escape sequence (ESC[201~) as raw hex bytes.
+    This prevents the TUI from staying stuck in paste mode when tmux's
+    closing bracket-paste code is dropped, which would swallow the Enter.
     """
     try:
-        # Send text as literal characters
+        # Send text as literal characters (triggers bracketed paste)
         subprocess.run(
             ["tmux", "send-keys", "-t", pane_id, "-l", text],
             capture_output=True,
             check=True,
         )
-        # Send Enter separately to submit
+        # Force-close bracketed paste mode: send \e[201~ as raw hex bytes.
+        # Harmless if paste already closed; essential if closing code was dropped.
+        subprocess.run(
+            ["tmux", "send-keys", "-t", pane_id, "-H", "1b", "5b", "32", "30", "31", "7e"],
+            capture_output=True,
+            check=True,
+        )
+        # Send Enter to submit
         subprocess.run(
             ["tmux", "send-keys", "-t", pane_id, "Enter"],
             capture_output=True,

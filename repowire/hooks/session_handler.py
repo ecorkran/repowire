@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 from repowire.hooks._tmux import get_tmux_info
-from repowire.hooks.utils import get_session_id
+from repowire.hooks.utils import get_session_id, update_status
 
 DAEMON_URL = os.environ.get("REPOWIRE_DAEMON_URL", "http://127.0.0.1:8377")
 
@@ -138,8 +138,14 @@ def main() -> int:
             except Exception as e:
                 print(f"repowire: failed to start WebSocket hook: {e}", file=sys.stderr)
 
+        # Re-mark peer as ONLINE on every SessionStart.
+        # SessionEnd fires between turns and marks the peer OFFLINE.
+        # When the ws-hook is already alive it won't re-register, so we
+        # must restore ONLINE status here via the HTTP API.
+        peer_identifier = get_session_id() or display_name
+        update_status(peer_identifier, "online")
+
         # Fetch peers and output context for Claude
-        # Note: Registration is now handled by the WebSocket hook's connect message
         peers = fetch_peers()
         if peers:
             context = format_peers_context(peers, display_name)

@@ -196,6 +196,19 @@ Hooks in `~/.claude/settings.json` auto-register peers and manage state:
 - SessionEnd marks peer offline but does NOT kill the ws-hook (SessionEnd fires spuriously between turns)
 - The ws-hook self-terminates via a pane liveness checker when the agent exits (~30s after pane goes idle)
 
+**Tmux Text Injection Pattern:**
+
+`tmux send-keys -l` triggers bracketed paste mode — tmux wraps text in `\e[200~...\e[201~`. If the closing sequence is dropped, the TUI stays in paste mode and swallows Enter. The fix is to always send the end-paste sequence explicitly after literal text:
+
+```python
+# 1. Send text literally (triggers bracketed paste)
+subprocess.run(["tmux", "send-keys", "-t", pane_id, "-l", text])
+# 2. Force-close bracketed paste: send ESC[201~ as raw hex
+subprocess.run(["tmux", "send-keys", "-t", pane_id, "-H", "1b", "5b", "32", "30", "31", "7e"])
+# 3. Send Enter to submit
+subprocess.run(["tmux", "send-keys", "-t", pane_id, "Enter"])
+```
+
 Key files:
 - `installers/claude_code.py` - Installs/uninstalls hooks in `~/.claude/settings.json`
 - `hooks/session_handler.py` - Handles SessionStart and SessionEnd events
