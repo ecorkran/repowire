@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 from repowire.hooks._tmux import get_tmux_info
-from repowire.hooks.utils import get_session_id, update_status
+from repowire.hooks.utils import get_session_id
 
 DAEMON_URL = os.environ.get("REPOWIRE_DAEMON_URL", "http://127.0.0.1:8377")
 
@@ -28,6 +28,35 @@ def _is_ws_hook_alive(pane_file: str) -> bool:
         return True
     except (ProcessLookupError, ValueError, OSError):
         pid_path.unlink(missing_ok=True)
+        return False
+
+
+def _register_peer_http(display_name: str, path: str, circle: str) -> bool:
+    """Register peer via HTTP POST /peers (upsert-safe).
+
+    Works even on a fresh daemon with empty peer registry, unlike
+    update_status which requires the peer to already exist in memory.
+    """
+    try:
+        data = json.dumps(
+            {
+                "name": display_name,
+                "display_name": display_name,
+                "path": path,
+                "circle": circle,
+                "backend": "claude-code",
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"{DAEMON_URL}/peers",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"repowire session: peer registration failed: {e}", file=sys.stderr)
         return False
 
 
@@ -138,12 +167,13 @@ def main() -> int:
             except Exception as e:
                 print(f"repowire: failed to start WebSocket hook: {e}", file=sys.stderr)
 
-        # Re-mark peer as ONLINE on every SessionStart.
-        # SessionEnd fires between turns and marks the peer OFFLINE.
-        # When the ws-hook is already alive it won't re-register, so we
-        # must restore ONLINE status here via the HTTP API.
-        peer_identifier = get_session_id() or display_name
-        update_status(peer_identifier, "online")
+        # Register peer via HTTP on every SessionStart.
+        # This handles two cases:
+        #   1. SessionEnd fired between turns and marked peer OFFLINE
+        #   2. Daemon was restarted and has empty peer registry
+        # POST /peers is upsert-safe: creates if missing, re-marks ONLINE if exists.
+        circle = tmux_info["session_name"] or "default"
+        _register_peer_http(display_name, cwd, circle)
 
         # Fetch peers and output context for Claude
         peers = fetch_peers()
