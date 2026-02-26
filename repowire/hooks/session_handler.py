@@ -16,18 +16,36 @@ from repowire.hooks._tmux import get_tmux_info
 DAEMON_URL = os.environ.get("REPOWIRE_DAEMON_URL", "http://127.0.0.1:8377")
 
 
-def _is_ws_hook_alive(pane_file: str) -> bool:
-    """Check if a ws-hook process is already running for this pane."""
-    pid_path = Path.home() / ".cache" / "repowire" / "hooks" / f"{pane_file}.pid"
+def _is_ws_hook_alive(pane_file: str, display_name: str) -> bool:
+    """Check if a ws-hook process is already running for this pane and peer.
+
+    Returns False (and kills the stale process) if the pane was reused by a
+    different project — e.g. scale-train-gcp hook still alive in a pane that
+    now belongs to models-scaletrain-vertexai.
+    """
+    hook_dir = Path.home() / ".cache" / "repowire" / "hooks"
+    pid_path = hook_dir / f"{pane_file}.pid"
+    name_path = hook_dir / f"{pane_file}.name"
     if not pid_path.exists():
         return False
     try:
         old_pid = int(pid_path.read_text().strip())
         os.kill(old_pid, 0)  # signal 0 = check process exists
-        return True
     except (ProcessLookupError, ValueError, OSError):
         pid_path.unlink(missing_ok=True)
+        name_path.unlink(missing_ok=True)
         return False
+    # Pane was reused by a different project — kill stale hook and respawn.
+    stored_name = name_path.read_text().strip() if name_path.exists() else ""
+    if stored_name and stored_name != display_name:
+        try:
+            os.kill(old_pid, 15)  # SIGTERM
+        except OSError:
+            pass
+        pid_path.unlink(missing_ok=True)
+        name_path.unlink(missing_ok=True)
+        return False
+    return True
 
 
 def _register_peer_http(display_name: str, path: str, circle: str) -> bool:
@@ -143,7 +161,7 @@ def main() -> int:
     if event == "SessionStart":
         # Launch async WebSocket hook in background (if not already running)
         pane_file = (pane_id or "unknown").replace("%", "")
-        if not _is_ws_hook_alive(pane_file):
+        if not _is_ws_hook_alive(pane_file, display_name):
             try:
                 hook_script = Path(__file__).parent / "websocket_hook.py"
                 if hook_script.exists():
@@ -163,6 +181,7 @@ def main() -> int:
                     finally:
                         log_file.close()  # Always close — subprocess inherits the fd
                     (pid_dir / f"{pane_file}.pid").write_text(str(proc.pid))
+                    (pid_dir / f"{pane_file}.name").write_text(display_name)
             except Exception as e:
                 print(f"repowire: failed to start WebSocket hook: {e}", file=sys.stderr)
 
