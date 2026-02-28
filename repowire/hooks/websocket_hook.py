@@ -22,6 +22,8 @@ except ImportError as e:
     print("Install with: pip install websockets", file=sys.stderr)
     sys.exit(1)
 
+from repowire.hooks.utils import get_session_id_from_pane
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -281,9 +283,7 @@ async def check_pane_alive(pane_id: str, display_name: str, daemon_url: str) -> 
             if consecutive_dead >= 3:  # 30s of no agent
                 logger.info(f"Pane {pane_id} no longer has an agent, exiting")
                 # Prefer session_id for unambiguous peer lookup
-                pane_file = pane_id.replace("%", "")
-                sid_file = Path.home() / ".cache" / "repowire" / "hooks" / f"{pane_file}.sid"
-                identifier = sid_file.read_text().strip() if sid_file.exists() else display_name
+                identifier = get_session_id_from_pane(pane_id) or display_name
                 _mark_peer_offline_http(identifier, daemon_url)
                 os._exit(0)
         else:

@@ -12,6 +12,19 @@ from pathlib import Path
 DAEMON_URL = os.environ.get("REPOWIRE_DAEMON_URL", "http://127.0.0.1:8377")
 
 
+def get_session_id_from_pane(pane_id: str) -> str | None:
+    """Read session_id from the .sid file for a given pane_id.
+
+    Returns the session_id (e.g., 'repow-dev-a1b2c3d4') or None if not available.
+    """
+    pane_file = pane_id.replace("%", "")
+    sid_file = Path.home() / ".cache" / "repowire" / "hooks" / f"{pane_file}.sid"
+    try:
+        return sid_file.read_text().strip() or None
+    except OSError:
+        return None
+
+
 def get_session_id() -> str | None:
     """Read session_id from the .sid file written by the WebSocket hook.
 
@@ -20,15 +33,7 @@ def get_session_id() -> str | None:
     pane_id = os.environ.get("TMUX_PANE")
     if not pane_id:
         return None
-
-    pane_file = pane_id.replace("%", "")
-    sid_file = Path.home() / ".cache" / "repowire" / "hooks" / f"{pane_file}.sid"
-    if sid_file.exists():
-        try:
-            return sid_file.read_text().strip() or None
-        except OSError as e:
-            print(f"repowire: failed to read session ID file {sid_file}: {e}", file=sys.stderr)
-    return None
+    return get_session_id_from_pane(pane_id)
 
 
 def update_status(peer_identifier: str, status: str) -> bool:
