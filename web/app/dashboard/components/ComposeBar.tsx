@@ -119,7 +119,17 @@ export function ComposeBar({ peer, apiBase }: ComposeBarProps) {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-400 font-mono">{error}</p>}
+      {error && (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-red-400 font-mono flex-1">{error}</p>
+          <button
+            onClick={submit}
+            className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {response && (
         <div className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-lg p-2 max-h-24 overflow-y-auto font-mono whitespace-pre-wrap">
           {response}

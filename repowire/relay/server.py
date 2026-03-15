@@ -82,6 +82,11 @@ _connections: dict[str, DaemonConnection] = {}  # key: "{user_id}/{daemon_id}"
 _user_daemons: dict[str, set[str]] = {}  # user_id -> set of connection keys
 _http_futures: dict[str, asyncio.Future[dict[str, Any]]] = {}  # request_id -> Future
 
+# SSE fan-out: shared poller per user, queues per client
+_sse_clients: set[asyncio.Queue[str]] = set()
+_sse_pollers: dict[str, asyncio.Task[None]] = {}  # user_id -> poller task
+_sse_last_event_id: str | None = None
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -344,6 +349,69 @@ _MSG_HANDLERS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
+async def _poll_events(user_id: str) -> None:
+    """Shared poller: fetches /events from daemon, fans out new events to SSE clients."""
+    global _sse_last_event_id  # noqa: PLW0603
+    import json as _json
+
+    while True:
+        try:
+            if not _sse_clients:
+                await asyncio.sleep(2)
+                continue
+
+            conn = _get_any_daemon(user_id)
+            if not conn:
+                await asyncio.sleep(2)
+                continue
+
+            req_id = str(uuid4())
+            loop = asyncio.get_event_loop()
+            future: asyncio.Future[dict[str, Any]] = loop.create_future()
+            _http_futures[req_id] = future
+
+            try:
+                await conn.websocket.send_json({
+                    "type": "http_request",
+                    "request_id": req_id,
+                    "method": "GET",
+                    "path": "/events",
+                    "headers": {},
+                    "query_string": "",
+                })
+                resp_msg = await asyncio.wait_for(future, timeout=10)
+            except Exception:
+                continue
+            finally:
+                _http_futures.pop(req_id, None)
+
+            if resp_msg.get("status") == 200:
+                body = base64.b64decode(resp_msg.get("body", ""))
+                events = _json.loads(body)
+
+                if _sse_last_event_id is None and events:
+                    _sse_last_event_id = events[-1].get("id")
+                else:
+                    for event in events:
+                        eid = event.get("id")
+                        if eid and eid != _sse_last_event_id:
+                            data = f"data: {_json.dumps(event)}\n\n"
+                            dead: list[asyncio.Queue[str]] = []
+                            for q in _sse_clients:
+                                try:
+                                    q.put_nowait(data)
+                                except asyncio.QueueFull:
+                                    dead.append(q)
+                            for q in dead:
+                                _sse_clients.discard(q)
+                    if events:
+                        _sse_last_event_id = events[-1].get("id", _sse_last_event_id)
+        except Exception:
+            log.debug("SSE poller error", exc_info=True)
+
+        await asyncio.sleep(2)
+
+
 def _find_web_output_dir() -> str | None:
     """Find the web/out directory for dashboard static files."""
     import sys
@@ -437,7 +505,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, Any]:
         return {"status": "ok", "connected_daemons": len(_connections)}
 
-    # -- SSE bridge (polls daemon /events, streams to browser) --
+    # -- SSE bridge (polls daemon /events, fans out to all SSE clients) --
 
     @app.get("/events/stream")
     async def events_stream(
@@ -452,45 +520,27 @@ def create_app() -> FastAPI:
         if not conn:
             raise HTTPException(status_code=502, detail="No daemon connected")
 
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=64)
+        _sse_clients.add(queue)
+
+        # Ensure shared poller is running for this user
+        if api_key.user_id not in _sse_pollers:
+            _sse_pollers[api_key.user_id] = asyncio.create_task(
+                _poll_events(api_key.user_id)
+            )
+
         async def event_generator():
-            last_event_id: str | None = None
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    # Tunnel a simple GET /events to the daemon
-                    req_id = str(uuid4())
-                    loop = asyncio.get_event_loop()
-                    future: asyncio.Future[dict[str, Any]] = loop.create_future()
-                    _http_futures[req_id] = future
-                    await conn.websocket.send_json({
-                        "type": "http_request",
-                        "request_id": req_id,
-                        "method": "GET",
-                        "path": "/events",
-                        "headers": {},
-                        "query_string": "",
-                    })
-                    resp_msg = await asyncio.wait_for(future, timeout=10)
-                    _http_futures.pop(req_id, None)
-
-                    if resp_msg.get("status") == 200:
-                        import json
-
-                        body = base64.b64decode(resp_msg.get("body", ""))
-                        events = json.loads(body)
-                        if last_event_id is None and events:
-                            last_event_id = events[-1].get("id")
-                        else:
-                            for event in events:
-                                eid = event.get("id")
-                                if eid and eid != last_event_id:
-                                    yield f"data: {json.dumps(event)}\n\n"
-                            if events:
-                                last_event_id = events[-1].get("id", last_event_id)
-                except Exception:
-                    _http_futures.pop(req_id, None)
-                await asyncio.sleep(2)
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        data = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield data
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                _sse_clients.discard(queue)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 

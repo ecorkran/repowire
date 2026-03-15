@@ -61,6 +61,7 @@ class PeerManager:
         self._lock = asyncio.Lock()
         self._events: deque[dict[str, Any]] = deque(maxlen=100)
         self._events_path = Config.get_config_dir() / "events.json"
+        self._events_dirty = False
         self._load_events()
         self._last_repair: float = 0.0
         self._repair_lock = asyncio.Lock()
@@ -76,10 +77,13 @@ class PeerManager:
             logger.warning("Failed to load events from %s", self._events_path)
 
     def _save_events(self) -> None:
-        """Persist events to disk."""
+        """Persist events to disk (called periodically, not on every write)."""
+        if not self._events_dirty:
+            return
         try:
             self._events_path.parent.mkdir(parents=True, exist_ok=True)
             self._events_path.write_text(json.dumps(list(self._events)))
+            self._events_dirty = False
         except Exception:
             logger.warning("Failed to save events to %s", self._events_path)
 
@@ -94,7 +98,7 @@ class PeerManager:
                 **data,
             }
         )
-        self._save_events()
+        self._events_dirty = True
         return event_id
 
     def _update_event(self, event_id: str, updates: dict[str, Any]) -> bool:
@@ -531,6 +535,7 @@ class PeerManager:
                 return  # Another coroutine already repaired
             self._last_repair = time.monotonic()
             await self._do_repair()
+            self._save_events()
 
     async def _do_repair(self) -> None:
         """Actual repair logic. Must hold _repair_lock."""

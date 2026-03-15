@@ -1,6 +1,7 @@
 "use client";
 
-import { X, Folder, GitBranch, Monitor, Terminal } from "lucide-react";
+import { useState } from "react";
+import { X, Folder, GitBranch, Monitor, Terminal, Copy, Check } from "lucide-react";
 import { cn, statusDot } from "../lib/utils";
 import type { Peer } from "../types";
 
@@ -10,6 +11,14 @@ interface PeerHeaderProps {
 }
 
 export function PeerHeader({ peer, onClose }: PeerHeaderProps) {
+  const [copied, setCopied] = useState(false);
+
+  const copyName = () => {
+    navigator.clipboard.writeText(peer.name);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <div className="flex flex-col gap-1 px-3 sm:px-4 py-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
       <div className="flex items-center gap-2 sm:gap-4">
@@ -20,9 +29,14 @@ export function PeerHeader({ peer, onClose }: PeerHeaderProps) {
             <span className="text-sm sm:text-base font-semibold text-zinc-200 truncate">
               {peer.description || peer.name}
             </span>
-            {peer.description && (
-              <span className="text-[10px] text-zinc-600 font-mono">{peer.name}</span>
-            )}
+            <button
+              onClick={copyName}
+              className="flex items-center gap-1 text-[10px] text-zinc-600 font-mono hover:text-zinc-400 transition-colors w-fit"
+              title="Copy peer name"
+            >
+              <span>{peer.name}</span>
+              {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+            </button>
           </div>
           <span
             className={cn(

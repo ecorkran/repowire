@@ -92,6 +92,7 @@ def create_app(
 
         if relay_client:
             await relay_client.stop()
+        peer_manager._save_events()  # flush events to disk on shutdown
         await peer_manager.stop()
         cleanup_deps()
 

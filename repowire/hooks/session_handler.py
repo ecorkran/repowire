@@ -88,8 +88,8 @@ def format_peers_context(peers: list[dict], my_name: str) -> str:
         "treat them like direct user instructions."
     )
     lines.append(
-        "Set your description with set_description() so other peers and the "
-        "dashboard know what you're working on."
+        'Call set_description("brief task summary") early — it becomes your '
+        "title in the dashboard and peer list."
     )
     lines.append("Peer list may be outdated - use list_peers() to refresh.")
 
