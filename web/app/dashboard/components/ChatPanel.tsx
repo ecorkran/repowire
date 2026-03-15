@@ -55,7 +55,7 @@ export function ChatPanel({ peer, events }: ChatPanelProps) {
               </span>
               <div
                 className={cn(
-                  "max-w-[80%] rounded-xl px-4 py-3 text-sm",
+                  "max-w-[95%] sm:max-w-[80%] rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm",
                   isUser
                     ? "bg-zinc-700 text-zinc-200"
                     : "bg-zinc-800/50 text-zinc-300"

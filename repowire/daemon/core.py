@@ -6,6 +6,7 @@ Uses unified WebSocket architecture with MessageRouter for all message delivery.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections import deque
@@ -59,8 +60,28 @@ class PeerManager:
 
         self._lock = asyncio.Lock()
         self._events: deque[dict[str, Any]] = deque(maxlen=100)
+        self._events_path = Config.get_config_dir() / "events.json"
+        self._load_events()
         self._last_repair: float = 0.0
         self._repair_lock = asyncio.Lock()
+
+    def _load_events(self) -> None:
+        """Load persisted events from disk."""
+        try:
+            if self._events_path.exists():
+                data = json.loads(self._events_path.read_text())
+                for event in data[-100:]:
+                    self._events.append(event)
+        except Exception:
+            logger.warning("Failed to load events from %s", self._events_path)
+
+    def _save_events(self) -> None:
+        """Persist events to disk."""
+        try:
+            self._events_path.parent.mkdir(parents=True, exist_ok=True)
+            self._events_path.write_text(json.dumps(list(self._events)))
+        except Exception:
+            logger.warning("Failed to save events to %s", self._events_path)
 
     def add_event(self, event_type: str, data: dict[str, Any]) -> str:
         """Add an event to the history. Returns event ID."""
@@ -73,6 +94,7 @@ class PeerManager:
                 **data,
             }
         )
+        self._save_events()
         return event_id
 
     def _update_event(self, event_id: str, updates: dict[str, Any]) -> bool:
