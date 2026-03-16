@@ -17,16 +17,17 @@ export function ChatPanel({ peer, events }: ChatPanelProps) {
   const projectName = peer.path?.split("/").pop() ?? "";
 
   const filtered = useMemo(() => {
-    const matchesPeer = (name?: string) =>
-      name === peer.name || name === peer.display_name || name === projectName;
+    const isPeerName = (name?: string) =>
+      name === peer.name || name === peer.display_name;
 
     return events
       .filter((e) => {
-        if (e.type === "chat_turn") return matchesPeer(e.peer);
-        if (e.type === "query" || e.type === "response" || e.type === "notification" || e.type === "broadcast") {
-          return matchesPeer(e.from) || matchesPeer(e.to);
+        if (e.type === "chat_turn") {
+          // Match session ID or folder name (legacy events use folder name)
+          return isPeerName(e.peer) || e.peer === projectName;
         }
-        return false;
+        // Protocol events use session IDs — strict match only
+        return isPeerName(e.from) || isPeerName(e.to);
       })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [peer.name, peer.display_name, projectName, events]);

@@ -31,7 +31,8 @@ def main() -> int:
 
     # Always mark peer as online when Claude finishes processing
     cwd = input_data.get("cwd", os.getcwd())
-    peer_display = Path(cwd).name
+    claude_session_id = input_data.get("session_id", "")
+    peer_display = claude_session_id[:8] if claude_session_id else Path(cwd).name
     pane_id = get_pane_id()
     if pane_id:
         if not update_status(pane_id, "online", use_pane_id=True):
