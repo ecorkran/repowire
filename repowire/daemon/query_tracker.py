@@ -41,7 +41,9 @@ class PendingQuery:
     to_peer_name: str
     query_text: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    future: asyncio.Future[str] = field(default_factory=lambda: asyncio.Future())
+    future: asyncio.Future[str] = field(
+        default_factory=lambda: asyncio.get_event_loop().create_future()
+    )
 
 
 class QueryTracker:
