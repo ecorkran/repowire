@@ -355,18 +355,17 @@ async def _poll_events(user_id: str) -> None:
     import json as _json
 
     while True:
+        await asyncio.sleep(2)
         try:
             if not _sse_clients:
-                await asyncio.sleep(2)
                 continue
 
             conn = _get_any_daemon(user_id)
             if not conn:
-                await asyncio.sleep(2)
                 continue
 
             req_id = str(uuid4())
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             future: asyncio.Future[dict[str, Any]] = loop.create_future()
             _http_futures[req_id] = future
 
@@ -385,31 +384,35 @@ async def _poll_events(user_id: str) -> None:
             finally:
                 _http_futures.pop(req_id, None)
 
-            if resp_msg.get("status") == 200:
-                body = base64.b64decode(resp_msg.get("body", ""))
-                events = _json.loads(body)
+            if resp_msg.get("status") != 200:
+                continue
 
-                if _sse_last_event_id is None and events:
-                    _sse_last_event_id = events[-1].get("id")
-                else:
-                    for event in events:
-                        eid = event.get("id")
-                        if eid and eid != _sse_last_event_id:
-                            data = f"data: {_json.dumps(event)}\n\n"
-                            dead: list[asyncio.Queue[str]] = []
-                            for q in _sse_clients:
-                                try:
-                                    q.put_nowait(data)
-                                except asyncio.QueueFull:
-                                    dead.append(q)
-                            for q in dead:
-                                _sse_clients.discard(q)
-                    if events:
-                        _sse_last_event_id = events[-1].get("id", _sse_last_event_id)
+            body = base64.b64decode(resp_msg.get("body", ""))
+            events = _json.loads(body)
+
+            if not events:
+                continue
+
+            if _sse_last_event_id is None:
+                _sse_last_event_id = events[-1].get("id")
+                continue
+
+            for event in events:
+                eid = event.get("id")
+                if eid and eid != _sse_last_event_id:
+                    data = f"data: {_json.dumps(event)}\n\n"
+                    dead: list[asyncio.Queue[str]] = []
+                    for q in _sse_clients:
+                        try:
+                            q.put_nowait(data)
+                        except asyncio.QueueFull:
+                            dead.append(q)
+                    for q in dead:
+                        _sse_clients.discard(q)
+
+            _sse_last_event_id = events[-1].get("id", _sse_last_event_id)
         except Exception:
-            log.debug("SSE poller error", exc_info=True)
-
-        await asyncio.sleep(2)
+            log.warning("SSE poller error", exc_info=True)
 
 
 def _find_web_output_dir() -> str | None:
