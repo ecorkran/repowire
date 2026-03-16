@@ -78,8 +78,8 @@ export function ComposeBar({ peer, apiBase }: ComposeBarProps) {
       {/* Controls row */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 font-mono truncate max-w-[8rem]">
-            → {peer.name}
+          <span className="text-xs text-zinc-300 font-mono truncate max-w-[10rem]" title={peer.name}>
+            → {peer.description || peer.name}
           </span>
           <div className="flex rounded-md overflow-hidden border border-zinc-700">
             {(["notify", "ask"] as const).map((m) => (
@@ -106,7 +106,7 @@ export function ComposeBar({ peer, apiBase }: ComposeBarProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={mode === "notify" ? "Send a notification..." : "Ask a question..."}
+          placeholder={mode === "notify" ? `Notify ${peer.description || peer.name}...` : `Ask ${peer.description || peer.name}...`}
           rows={1}
           className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
         />
