@@ -10,12 +10,17 @@ from pathlib import Path
 
 from repowire.hooks._tmux import get_pane_id
 from repowire.hooks.utils import daemon_post, update_status
-from repowire.session.transcript import extract_last_turn_pair
+from repowire.session.transcript import extract_last_turn_pair, extract_last_turn_tool_calls
 
 
-def _post_chat_turn(peer_name: str, role: str, text: str) -> None:
+def _post_chat_turn(
+    peer_name: str, role: str, text: str, tool_calls: list[dict[str, str]] | None = None,
+) -> None:
     """Post a chat turn to the daemon for dashboard display. Best-effort."""
-    daemon_post("/events/chat", {"peer": peer_name, "role": role, "text": text})
+    payload: dict = {"peer": peer_name, "role": role, "text": text}
+    if tool_calls:
+        payload["tool_calls"] = tool_calls
+    daemon_post("/events/chat", payload)
 
 
 def main() -> int:
@@ -54,10 +59,11 @@ def main() -> int:
     # Extract and post last turn pair for dashboard
     transcript_path = Path(transcript_path_str).expanduser().resolve()
     user_text, assistant_text = extract_last_turn_pair(transcript_path)
+    tool_calls = extract_last_turn_tool_calls(transcript_path) if assistant_text else []
     if user_text:
         _post_chat_turn(peer_display, "user", user_text)
     if assistant_text:
-        _post_chat_turn(peer_display, "assistant", assistant_text)
+        _post_chat_turn(peer_display, "assistant", assistant_text, tool_calls or None)
 
     # Deliver response to daemon for query resolution
     if pane_id and assistant_text:

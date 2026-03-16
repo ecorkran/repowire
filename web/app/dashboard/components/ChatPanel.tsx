@@ -1,14 +1,42 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ChevronRight } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { Peer, Event } from "../types";
 
 interface ChatPanelProps {
   peer: Peer;
   events: Event[];
+}
+
+function ToolCallsList({ toolCalls }: { toolCalls: { name: string; input: string }[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (toolCalls.length === 0) return null;
+
+  return (
+    <div className="mt-2 border-t border-zinc-700/50 pt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-400 transition-colors"
+      >
+        <ChevronRight className={cn("w-3 h-3 transition-transform", expanded && "rotate-90")} />
+        <span>{toolCalls.length} tool call{toolCalls.length > 1 ? "s" : ""}</span>
+      </button>
+      {expanded && (
+        <div className="mt-1.5 space-y-1 pl-4">
+          {toolCalls.map((tc, i) => (
+            <div key={i} className="flex items-baseline gap-2 text-[11px] font-mono">
+              <span className="text-blue-400 shrink-0">{tc.name}</span>
+              <span className="text-zinc-600 truncate">{tc.input}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ChatPanel({ peer, events }: ChatPanelProps) {
@@ -65,9 +93,12 @@ export function ChatPanel({ peer, events }: ChatPanelProps) {
                 {isUser ? (
                   <p className="whitespace-pre-wrap">{event.text}</p>
                 ) : (
-                  <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-700 prose-code:text-emerald-300 prose-ul:list-disc prose-ul:pl-4 prose-li:my-0.5 prose-table:border-collapse prose-th:border prose-th:border-zinc-700 prose-th:px-3 prose-th:py-1.5 prose-th:bg-zinc-900 prose-td:border prose-td:border-zinc-700 prose-td:px-3 prose-td:py-1.5">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{event.text}</ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-700 prose-code:text-emerald-300 prose-ul:list-disc prose-ul:pl-4 prose-li:my-0.5 prose-table:border-collapse prose-th:border prose-th:border-zinc-700 prose-th:px-3 prose-th:py-1.5 prose-th:bg-zinc-900 prose-td:border prose-td:border-zinc-700 prose-td:px-3 prose-td:py-1.5">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{event.text}</ReactMarkdown>
+                    </div>
+                    {event.tool_calls && <ToolCallsList toolCalls={event.tool_calls} />}
+                  </>
                 )}
               </div>
               <span className="text-[10px] text-zinc-600 font-mono tabular-nums px-1">

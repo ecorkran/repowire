@@ -41,6 +41,81 @@ def extract_last_turn_pair(transcript_path: Path) -> tuple[str | None, str | Non
     return last_user, last_assistant
 
 
+def extract_last_turn_tool_calls(transcript_path: Path) -> list[dict[str, str]]:
+    """Extract tool calls from the last assistant turn.
+
+    Reads the transcript backwards from the last assistant message,
+    collecting tool_use entries until the previous user message.
+
+    Returns list of {"name": "...", "input": "one-line summary"}.
+    """
+    if not transcript_path.exists():
+        return []
+
+    entries: list[dict[str, Any]] = []
+    with open(transcript_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    # Walk backwards: collect tool_use from assistant entries until we hit a user entry
+    tool_calls: list[dict[str, str]] = []
+    found_assistant = False
+    for entry in reversed(entries):
+        entry_type = entry.get("type")
+        if entry_type == "user" and found_assistant:
+            break
+        if entry_type != "assistant":
+            continue
+        found_assistant = True
+        content = entry.get("message", {}).get("content", [])
+        if not isinstance(content, list):
+            continue
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "tool_use":
+                name = item.get("name", "unknown")
+                tool_input = item.get("input", {})
+                summary = _summarize_tool_input(name, tool_input)
+                tool_calls.append({"name": name, "input": summary})
+
+    tool_calls.reverse()  # chronological order
+    return tool_calls
+
+
+def _summarize_tool_input(name: str, tool_input: Any) -> str:
+    """Create a one-line summary of tool input."""
+    if not isinstance(tool_input, dict):
+        return str(tool_input)[:80]
+
+    # File operations: show the path
+    if "file_path" in tool_input:
+        return tool_input["file_path"].split("/")[-1]
+    # Bash: show the command
+    if "command" in tool_input:
+        return tool_input["command"][:80]
+    # Search: show the pattern
+    if "pattern" in tool_input:
+        return f"{tool_input['pattern']}"
+    # Glob
+    if "pattern" in tool_input:
+        return tool_input["pattern"]
+    # MCP tools
+    if "peer_name" in tool_input:
+        return f"→ {tool_input['peer_name']}"
+    if "description" in tool_input:
+        return tool_input["description"][:60]
+    # Fallback: first string value
+    for v in tool_input.values():
+        if isinstance(v, str) and v:
+            return v[:60]
+    return ""
+
+
 def _extract_text_from_content(content: Any) -> str | None:
     if isinstance(content, str):
         return content

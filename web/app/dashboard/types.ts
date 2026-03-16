@@ -38,4 +38,5 @@ export interface Event {
   new_status?: "online" | "busy" | "offline";
   query_id?: string;
   correlation_id?: string;
+  tool_calls?: { name: string; input: string }[];
 }
