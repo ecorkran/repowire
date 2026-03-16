@@ -588,3 +588,18 @@ class PeerManager:
             await self.update_peer_status(peer_id, PeerStatus.OFFLINE)
             if self._query_tracker:
                 self._query_tracker.cancel_queries_to_peer(peer_id)
+
+        # Evict long-offline peers to prevent registry bloat
+        max_age = self._config.daemon.prune_max_age_hours * 3600
+        now = time.time()
+        async with self._lock:
+            stale = [
+                pid for pid, p in self._peers.items()
+                if p.status == PeerStatus.OFFLINE
+                and p.last_seen
+                and (now - p.last_seen.timestamp()) > max_age
+            ]
+            for pid in stale:
+                del self._peers[pid]
+            if stale:
+                logger.info(f"lazy_repair: evicted {len(stale)} stale offline peers")

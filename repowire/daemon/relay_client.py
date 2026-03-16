@@ -123,10 +123,18 @@ class RelayClient:
         backoff = _INITIAL_BACKOFF
         while not self._stopping:
             try:
-                async with websockets.connect(self._build_url()) as ws:
+                async with websockets.connect(
+                    self._build_url(),
+                    open_timeout=10,
+                    close_timeout=5,
+                ) as ws:
                     self._ws = ws
                     backoff = _INITIAL_BACKOFF
                     logger.info("Connected to relay at %s", self._config.url)
+                    # Recreate httpx client on each reconnect (clear stale state)
+                    if self._http:
+                        await self._http.aclose()
+                    self._http = httpx.AsyncClient()
                     await self._listen(ws)
             except asyncio.CancelledError:
                 break
