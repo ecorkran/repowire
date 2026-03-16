@@ -21,3 +21,4 @@ session-logs.md
 
 # Dashboard build output (run 'repowire build-ui' before 'uv build')
 web/out/
+.coverage
