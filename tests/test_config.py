@@ -2,7 +2,15 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from repowire.config.models import Config, PeerConfig, load_config
+from repowire.config.models import (
+    AgentType,
+    Config,
+    DaemonConfig,
+    PeerConfig,
+    RelayConfig,
+    SpawnSettings,
+    load_config,
+)
 
 
 class TestConfig:
@@ -37,6 +45,17 @@ class TestConfig:
         )
         assert peer.name == "test"
 
+    def test_save_and_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            with patch.object(Config, "get_config_dir", return_value=Path(tmpdir)), \
+                 patch.object(Config, "get_config_path", return_value=config_path):
+                cfg = Config(daemon=DaemonConfig(port=9999))
+                cfg.save()
+
+                loaded = load_config()
+                assert loaded.daemon.port == 9999
+
     def test_load_config_with_env(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(Config, "get_config_path", return_value=Path(tmpdir) / "config.yaml"):
@@ -52,3 +71,61 @@ class TestConfig:
                     assert config.relay.url == "wss://custom.relay.io"
                     assert config.relay.api_key == "rw_test123"
                     assert config.relay.enabled is True
+
+
+class TestRelayConfig:
+    def test_dashboard_url_without_key(self):
+        relay = RelayConfig()
+        assert relay.dashboard_url is None
+
+    def test_dashboard_url_with_key(self):
+        relay = RelayConfig(api_key="rw_test")
+        assert relay.dashboard_url == "https://repowire.io/dashboard"
+
+    def test_default_url(self):
+        relay = RelayConfig()
+        assert relay.url == "wss://repowire.io"
+
+
+class TestSpawnSettings:
+    def test_defaults_empty(self):
+        spawn = SpawnSettings()
+        assert spawn.allowed_commands == []
+        assert spawn.allowed_paths == []
+
+    def test_with_values(self):
+        spawn = SpawnSettings(
+            allowed_commands=["claude", "opencode"],
+            allowed_paths=["~/git"],
+        )
+        assert len(spawn.allowed_commands) == 2
+        assert "~/git" in spawn.allowed_paths
+
+
+class TestAgentType:
+    def test_claude_code(self):
+        assert AgentType.CLAUDE_CODE == "claude-code"
+
+    def test_opencode(self):
+        assert AgentType.OPENCODE == "opencode"
+
+    def test_from_string(self):
+        assert AgentType("claude-code") == AgentType.CLAUDE_CODE
+
+
+class TestPeerConfigEffective:
+    def test_effective_name_with_display(self):
+        peer = PeerConfig(name="legacy", display_name="modern")
+        assert peer.effective_name == "modern"
+
+    def test_effective_name_fallback(self):
+        peer = PeerConfig(name="legacy")
+        assert peer.effective_name == "legacy"
+
+    def test_effective_peer_id_with_id(self):
+        peer = PeerConfig(name="test", peer_id="repow-dev-abc")
+        assert peer.effective_peer_id == "repow-dev-abc"
+
+    def test_effective_peer_id_legacy(self):
+        peer = PeerConfig(name="test", tmux_session="0:test")
+        assert peer.effective_peer_id == "legacy-0:test"
