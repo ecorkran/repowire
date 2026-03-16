@@ -1,6 +1,5 @@
 """Tests for QueryTracker — correlation ID tracking and query lifecycle."""
 
-import asyncio
 
 import pytest
 

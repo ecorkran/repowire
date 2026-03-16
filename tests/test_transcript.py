@@ -138,7 +138,9 @@ class TestExtractToolCalls:
             }) + "\n")
             f.write(json.dumps({
                 "type": "user",
-                "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": ""}]},
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "t1", "content": ""},
+                ]},
             }) + "\n")
             f.write(json.dumps({
                 "type": "assistant",
@@ -148,7 +150,9 @@ class TestExtractToolCalls:
             }) + "\n")
             f.write(json.dumps({
                 "type": "user",
-                "message": {"content": [{"type": "tool_result", "tool_use_id": "t2", "content": ""}]},
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "t2", "content": ""},
+                ]},
             }) + "\n")
             f.write(json.dumps({
                 "type": "assistant",
