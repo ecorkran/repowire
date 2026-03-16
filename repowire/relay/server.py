@@ -732,18 +732,20 @@ def create_app() -> FastAPI:
 
         import json as _json
 
-        from datastar_py import ServerSentEventGenerator as SseGen  # noqa: N814
-        from datastar_py.fastapi import DatastarResponse
-
-        # Datastar sends signals as JSON body
-        body = await request.body()
-        try:
-            signals = _json.loads(body)
-        except _json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid JSON")
-
-        text = signals.get("composeText", "").strip()
-        mode = signals.get("composeMode", "notify")
+        # Accept both form data and JSON (Datastar signals)
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            body = await request.body()
+            try:
+                signals = _json.loads(body)
+            except _json.JSONDecodeError:
+                raise HTTPException(status_code=400)
+            text = signals.get("composeText", "").strip()
+            mode = signals.get("composeMode", "notify")
+        else:
+            form = await request.form()
+            text = str(form.get("text", "")).strip()
+            mode = str(form.get("mode", "notify"))
         if not text:
             raise HTTPException(status_code=400, detail="Empty message")
 
@@ -782,30 +784,8 @@ def create_app() -> FastAPI:
             resp_body = base64.b64decode(resp.get("body", ""))
             raise HTTPException(status_code=resp["status"], detail=resp_body.decode())
 
-        # Respond with SSE: clear compose text + append sent message to chat
-        from datetime import datetime, timezone
-
-        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
-        sent_html = (
-            f'<div class="flex flex-col gap-1 items-end">'
-            f'<span class="text-[10px] text-zinc-500 font-mono px-1">dashboard</span>'
-            f'<div class="max-w-[95%] sm:max-w-[80%] rounded-xl px-3 sm:px-4 '
-            f'py-2 sm:py-3 text-sm bg-emerald-900/30 text-emerald-200 '
-            f'border border-emerald-800/30">'
-            f'<p class="whitespace-pre-wrap">{text}</p></div>'
-            f'<span class="text-[10px] text-zinc-600 font-mono tabular-nums px-1">'
-            f'{now}</span></div>'
-        )
-
-        async def gen():
-            yield SseGen.patch_signals({"composeText": ""})
-            yield SseGen.patch_elements(
-                sent_html,
-                selector="#chat-messages",
-                mode="append",
-            )
-
-        return DatastarResponse(gen())
+        # Redirect back to peer detail — page re-renders with sent message visible
+        return RedirectResponse(url=f"/v2/peer/{peer_name}", status_code=303)
 
     # -- Health --
 
