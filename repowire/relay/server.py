@@ -644,29 +644,10 @@ def create_app() -> FastAPI:
             generate_sse_updates(get_peers, get_events, api_key.user_id)
         )
 
-    @app.get("/v2/peer/{peer_name}")
-    async def dashboard_v2_peer(
-        peer_name: str, rw_token: str | None = Cookie(default=None)
-    ) -> StreamingResponse:
-        if not rw_token:
-            raise HTTPException(status_code=401)
-        api_key = validate_api_key(rw_token)
-        if not api_key:
-            raise HTTPException(status_code=401)
-
-        conn = _get_any_daemon(api_key.user_id)
-        if not conn:
-            raise HTTPException(status_code=502)
-
-        # Fetch peer + events
+    async def _tunnel_get(conn: DaemonConnection, path: str) -> Any:
+        """Tunnel a GET request to the daemon, return parsed JSON."""
         import json as _json
 
-        from datastar_py import ServerSentEventGenerator as SseGen  # noqa: N814
-        from datastar_py.fastapi import DatastarResponse
-
-        from repowire.relay.dashboard import _render_peer_detail
-
-        # Fetch peers
         req_id = str(uuid4())
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
@@ -674,92 +655,62 @@ def create_app() -> FastAPI:
         try:
             await conn.websocket.send_json({
                 "type": "http_request", "request_id": req_id,
-                "method": "GET", "path": "/peers", "headers": {}, "query_string": "",
+                "method": "GET", "path": path, "headers": {}, "query_string": "",
             })
             resp = await asyncio.wait_for(future, timeout=10)
-        except Exception:
-            raise HTTPException(status_code=502)
         finally:
             _http_futures.pop(req_id, None)
+        if resp.get("status") != 200:
+            return None
+        return _json.loads(base64.b64decode(resp.get("body", "")))
 
-        peers_data = _json.loads(base64.b64decode(resp.get("body", "")))
-        peers = peers_data.get("peers", peers_data) if isinstance(peers_data, dict) else peers_data
+    @app.get("/v2/peer/{peer_name}", response_class=HTMLResponse)
+    async def dashboard_v2_peer(
+        peer_name: str, rw_token: str | None = Cookie(default=None)
+    ) -> Response:
+        if not rw_token or not validate_api_key(rw_token):
+            return RedirectResponse(url="/", status_code=302)
+        api_key = validate_api_key(rw_token)
+
+        conn = _get_any_daemon(api_key.user_id) if api_key else None
+        if not conn:
+            raise HTTPException(status_code=502)
+
+        from repowire.relay.dashboard import (
+            _render_peer_detail,
+            _render_sidebar,
+            render_dashboard_html,
+        )
+
+        peers_data = await _tunnel_get(conn, "/peers")
+        if peers_data and isinstance(peers_data, dict):
+            peers = peers_data.get("peers", peers_data)
+        else:
+            peers = peers_data or []
         peer = next((p for p in peers if p.get("name") == peer_name), None)
         if not peer:
             raise HTTPException(status_code=404)
 
-        # Fetch events
-        req_id2 = str(uuid4())
-        future2: asyncio.Future[dict[str, Any]] = loop.create_future()
-        _http_futures[req_id2] = future2
-        try:
-            await conn.websocket.send_json({
-                "type": "http_request", "request_id": req_id2,
-                "method": "GET", "path": "/events", "headers": {}, "query_string": "",
-            })
-            resp2 = await asyncio.wait_for(future2, timeout=10)
-        except Exception:
-            raise HTTPException(status_code=502)
-        finally:
-            _http_futures.pop(req_id2, None)
+        events_data = await _tunnel_get(conn, "/events")
+        events = events_data if events_data else []
 
-        events = _json.loads(base64.b64decode(resp2.get("body", "")))
+        sidebar_html = _render_sidebar(peers)
+        content_html = _render_peer_detail(peer, events)
+        online_count = sum(1 for p in peers if p.get("status") in ("online", "busy"))
 
-        html = _render_peer_detail(peer, events)
-
-        async def gen():
-            yield SseGen.patch_elements(html, selector="#main-content", mode="inner")
-
-        return DatastarResponse(gen())
+        html = render_dashboard_html(
+            sidebar_html=sidebar_html,
+            content_html=content_html,
+            online_count=online_count,
+        )
+        return HTMLResponse(html, headers={"cache-control": "no-cache, must-revalidate"})
 
     @app.get("/v2/overview")
     async def dashboard_v2_overview(
         rw_token: str | None = Cookie(default=None),
-    ) -> StreamingResponse:
-        """Return to overview from peer detail."""
-        if not rw_token:
-            raise HTTPException(status_code=401)
-        api_key = validate_api_key(rw_token)
-        if not api_key:
-            raise HTTPException(status_code=401)
-
-        import json as _json
-
-        from datastar_py import ServerSentEventGenerator as SseGen  # noqa: N814
-        from datastar_py.fastapi import DatastarResponse
-
-        from repowire.relay.dashboard import _render_overview
-
-        conn = _get_any_daemon(api_key.user_id)
-        peers, events = [], []
-        if conn:
-            for path, target in [("/peers", "peers"), ("/events", "events")]:
-                req_id = str(uuid4())
-                loop = asyncio.get_running_loop()
-                fut: asyncio.Future[dict[str, Any]] = loop.create_future()
-                _http_futures[req_id] = fut
-                try:
-                    await conn.websocket.send_json({
-                        "type": "http_request", "request_id": req_id,
-                        "method": "GET", "path": path, "headers": {}, "query_string": "",
-                    })
-                    resp = await asyncio.wait_for(fut, timeout=10)
-                    data = _json.loads(base64.b64decode(resp.get("body", "")))
-                    if target == "peers":
-                        peers = data.get("peers", data) if isinstance(data, dict) else data
-                    else:
-                        events = data
-                except Exception:
-                    pass
-                finally:
-                    _http_futures.pop(req_id, None)
-
-        html = _render_overview(peers, events)
-
-        async def gen():
-            yield SseGen.patch_elements(html, selector="#main-content", mode="inner")
-
-        return DatastarResponse(gen())
+    ) -> Response:
+        """Redirect back to main dashboard."""
+        return RedirectResponse(url="/v2", status_code=302)
 
     @app.post("/v2/send/{peer_name}")
     async def dashboard_v2_send(
