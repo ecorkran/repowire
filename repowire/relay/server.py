@@ -519,12 +519,53 @@ def create_app() -> FastAPI:
     async def dashboard_v2(rw_token: str | None = Cookie(default=None)) -> Response:
         if not rw_token or not validate_api_key(rw_token):
             return RedirectResponse(url="/", status_code=302)
-        from repowire.relay.dashboard import render_dashboard_html
 
-        return HTMLResponse(
-            render_dashboard_html(),
-            headers={"cache-control": "no-cache, must-revalidate"},
+        api_key = validate_api_key(rw_token)
+        from repowire.relay.dashboard import (
+            _render_overview,
+            _render_sidebar,
+            render_dashboard_html,
         )
+
+        # Pre-render content server-side for instant load
+        peers, events = [], []
+        if api_key:
+            conn = _get_any_daemon(api_key.user_id)
+            if conn:
+                import json as _json
+
+                for path, target in [("/peers", "peers"), ("/events", "events")]:
+                    req_id = str(uuid4())
+                    loop = asyncio.get_running_loop()
+                    fut: asyncio.Future[dict[str, Any]] = loop.create_future()
+                    _http_futures[req_id] = fut
+                    try:
+                        await conn.websocket.send_json({
+                            "type": "http_request", "request_id": req_id,
+                            "method": "GET", "path": path,
+                            "headers": {}, "query_string": "",
+                        })
+                        resp = await asyncio.wait_for(fut, timeout=10)
+                        data = _json.loads(base64.b64decode(resp.get("body", "")))
+                        if target == "peers":
+                            peers = data.get("peers", data) if isinstance(data, dict) else data
+                        else:
+                            events = data
+                    except Exception:
+                        pass
+                    finally:
+                        _http_futures.pop(req_id, None)
+
+        sidebar_html = _render_sidebar(peers)
+        overview_html = _render_overview(peers, events)
+        online_count = sum(1 for p in peers if p.get("status") in ("online", "busy"))
+
+        html = render_dashboard_html(
+            sidebar_html=sidebar_html,
+            content_html=overview_html,
+            online_count=online_count,
+        )
+        return HTMLResponse(html, headers={"cache-control": "no-cache, must-revalidate"})
 
     @app.get("/v2/sse")
     async def dashboard_v2_sse(

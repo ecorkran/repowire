@@ -44,7 +44,7 @@ tailwind.config = {
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.858 15.355-5.858 21.213 0"/></svg>
         <span class="hidden sm:inline">Connected</span>
         <span class="text-zinc-600">·</span>
-        <span id="online-count" class="tabular-nums">0 online</span>
+        <span id="online-count" class="tabular-nums">{{ online_count }} online</span>
       </div>
     </div>
   </header>
@@ -55,23 +55,26 @@ tailwind.config = {
     <!-- Mobile sidebar overlay -->
     <div data-show="$mobileMenu" class="absolute inset-0 z-30 md:hidden flex">
       <aside id="mobile-sidebar" class="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col overflow-y-auto shrink-0">
-        <!-- Populated via SSE -->
+        {{ sidebar_html }}
       </aside>
       <div class="flex-1 bg-black/50" data-on-click="$mobileMenu = false"></div>
     </div>
 
     <!-- Desktop sidebar -->
     <aside id="sidebar" class="hidden md:flex w-56 border-r border-zinc-800 flex-col overflow-y-auto shrink-0">
-      <!-- Populated via SSE -->
+      {{ sidebar_html }}
     </aside>
 
     <!-- Main content -->
     <main id="main-content" class="flex-1 flex flex-col overflow-hidden min-w-0"
-          data-init="@get('/v2/sse', {retryInterval: 2000, retry: 'always'})">
-      <!-- Populated via SSE -->
+          data-init="@get('/v2/sse', {retryInterval: 3000, retry: 'always'})">
+      {% if content_html %}
+      {{ content_html }}
+      {% else %}
       <div class="flex items-center justify-center h-full text-zinc-600 text-sm">
         Loading...
       </div>
+      {% endif %}
     </main>
   </div>
 </body>

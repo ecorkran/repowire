@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 # Jinja2 environment
 _templates_dir = Path(__file__).parent / "templates"
-_jinja = Environment(loader=FileSystemLoader(str(_templates_dir)), autoescape=True)
+_jinja = Environment(loader=FileSystemLoader(str(_templates_dir)), autoescape=False)
 
 
 def _peer_label(peer: dict) -> str:
@@ -127,9 +127,17 @@ def _render_peer_detail(peer: dict, events: list[dict]) -> str:
     return tmpl.render(peer=peer, messages=messages)
 
 
-def render_dashboard_html() -> str:
-    """Render the full dashboard HTML page."""
-    return _jinja.get_template("dashboard.html").render()
+def render_dashboard_html(
+    sidebar_html: str = "",
+    content_html: str = "",
+    online_count: int = 0,
+) -> str:
+    """Render the full dashboard HTML page with optional pre-rendered content."""
+    return _jinja.get_template("dashboard.html").render(
+        sidebar_html=sidebar_html,
+        content_html=content_html,
+        online_count=online_count,
+    )
 
 
 async def generate_sse_updates(
