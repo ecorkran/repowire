@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X, Folder, GitBranch, Monitor, Terminal, Copy, Check } from "lucide-react";
-import { cn, statusDot } from "../lib/utils";
+import { cn, shortPath, statusDot } from "../lib/utils";
 import { peerLabel } from "../types";
 import type { Peer } from "../types";
 
@@ -63,12 +63,16 @@ export function PeerHeader({ peer, onClose }: PeerHeaderProps) {
             <span>{String(peer.metadata.branch)}</span>
           </div>
         )}
-        {peer.path && (
-          <div className="flex items-center gap-1 min-w-0">
-            <Folder className="w-3 h-3 text-zinc-600 shrink-0" />
-            <span className="truncate">{peer.path}</span>
-          </div>
-        )}
+        {peer.path && (() => {
+          const { folder, parent } = shortPath(peer.path);
+          return (
+            <div className="flex items-center gap-1 min-w-0">
+              <Folder className="w-3 h-3 text-zinc-600 shrink-0" />
+              <span className="text-zinc-600 truncate">{parent}</span>
+              <span className="shrink-0">{folder}</span>
+            </div>
+          );
+        })()}
         {peer.machine && (
           <div className="flex items-center gap-1 shrink-0 hidden lg:flex">
             <Monitor className="w-3 h-3 text-zinc-600" />

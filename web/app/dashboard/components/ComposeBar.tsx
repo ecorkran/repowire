@@ -103,25 +103,32 @@ export function ComposeBar({ peer, apiBase, onSent }: ComposeBarProps) {
         <span className="ml-auto text-[10px] text-zinc-600 hidden sm:inline">⌘↵ to send</span>
       </div>
 
-      {/* Textarea + send button */}
-      <div className="flex gap-2 items-end min-w-0">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={mode === "notify" ? `Notify ${peerLabel(peer)}...` : `Ask ${peerLabel(peer)}...`}
-          rows={1}
-          className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
-        />
-        <button
-          onClick={submit}
-          disabled={!text.trim() || isPending}
-          className="p-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {isPending ? <RefreshCw className="w-4 h-4 text-zinc-300 animate-spin" /> : <Send className="w-4 h-4 text-zinc-300" />}
-        </button>
-      </div>
+      {/* Textarea */}
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={mode === "notify" ? `Notify ${peerLabel(peer)}...` : `Ask ${peerLabel(peer)}...`}
+        rows={1}
+        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
+      />
+
+      {/* Send button — full width on mobile */}
+      <button
+        onClick={submit}
+        disabled={!text.trim() || isPending}
+        className={cn(
+          "w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors",
+          text.trim()
+            ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+            : "bg-zinc-800 text-zinc-500",
+          "disabled:opacity-40 disabled:cursor-not-allowed"
+        )}
+      >
+        {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        <span>{mode === "notify" ? "Send" : "Ask"}</span>
+      </button>
 
       {error && (
         <div className="flex items-center gap-2">

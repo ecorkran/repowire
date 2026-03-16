@@ -23,3 +23,11 @@ export function statusDot(status: "online" | "busy" | "offline"): string {
     ? "bg-amber-500"
     : "bg-zinc-600";
 }
+
+/** Format path with folder name prominent: "myproject" or "…/parent/myproject" */
+export function shortPath(path: string): { folder: string; parent: string } {
+  const parts = path.split("/").filter(Boolean);
+  const folder = parts.pop() || path;
+  const parent = parts.length > 1 ? `…/${parts.slice(-1)[0]}/` : parts.length === 1 ? `${parts[0]}/` : "";
+  return { folder, parent };
+}

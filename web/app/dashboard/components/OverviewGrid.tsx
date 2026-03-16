@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Activity, Plus, Radio, Users } from "lucide-react";
-import { cn, statusDot, timeAgo } from "../lib/utils";
+import { cn, shortPath, statusDot, timeAgo } from "../lib/utils";
 import { SpawnDialog } from "./SpawnDialog";
 import type { Peer, Event } from "../types";
 import { peerLabel } from "../types";
@@ -132,10 +132,16 @@ export function OverviewGrid({ peers, events, apiBase, onSelectPeer, onRefresh }
                         <span className="truncate">{String(peer.metadata.branch)}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-600">path:</span>
-                      <span className="truncate">{peer.path}</span>
-                    </div>
+                    {peer.path && (() => {
+                      const { folder, parent } = shortPath(peer.path);
+                      return (
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-zinc-600">path:</span>
+                          <span className="text-zinc-600 truncate">{parent}</span>
+                          <span className="text-zinc-400 font-medium shrink-0">{folder}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Last activity */}
