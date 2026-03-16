@@ -720,6 +720,78 @@ def create_app() -> FastAPI:
 
         return DatastarResponse(gen())
 
+    @app.post("/v2/send/{peer_name}")
+    async def dashboard_v2_send(
+        peer_name: str, request: Request, rw_token: str | None = Cookie(default=None)
+    ) -> Response:
+        if not rw_token:
+            raise HTTPException(status_code=401)
+        api_key = validate_api_key(rw_token)
+        if not api_key:
+            raise HTTPException(status_code=401)
+
+        conn = _get_any_daemon(api_key.user_id)
+        if not conn:
+            raise HTTPException(status_code=502, detail="No daemon connected")
+
+        import json as _json
+
+        from datastar_py import ServerSentEventGenerator as SseGen  # noqa: N814
+        from datastar_py.fastapi import DatastarResponse
+
+        # Parse form data from Datastar signals
+        body = await request.body()
+        try:
+            signals = _json.loads(body)
+        except _json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        text = signals.get("composeText", "").strip()
+        mode = signals.get("composeMode", "notify")
+        if not text:
+            raise HTTPException(status_code=400, detail="Empty message")
+
+        # Tunnel to daemon
+        endpoint = "/notify" if mode == "notify" else "/query"
+        payload = _json.dumps({
+            "from_peer": "dashboard",
+            "to_peer": peer_name,
+            "text": text,
+            "bypass_circle": True,
+        })
+
+        req_id = str(uuid4())
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        _http_futures[req_id] = future
+        try:
+            await conn.websocket.send_json({
+                "type": "http_request",
+                "request_id": req_id,
+                "method": "POST",
+                "path": endpoint,
+                "headers": {"content-type": "application/json"},
+                "query_string": "",
+                "body": base64.b64encode(payload.encode()).decode(),
+            })
+            resp = await asyncio.wait_for(future, timeout=30)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Timeout")
+        except Exception:
+            raise HTTPException(status_code=502, detail="Send failed")
+        finally:
+            _http_futures.pop(req_id, None)
+
+        if resp.get("status", 200) >= 400:
+            resp_body = base64.b64decode(resp.get("body", ""))
+            raise HTTPException(status_code=resp["status"], detail=resp_body.decode())
+
+        # Clear compose text and refresh peer view
+        async def gen():
+            yield SseGen.patch_signals({"composeText": ""})
+
+        return DatastarResponse(gen())
+
     # -- Health --
 
     @app.get("/health")
