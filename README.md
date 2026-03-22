@@ -172,7 +172,7 @@ Claude Code doesn't have an API. Repowire uses **hooks** for lifecycle managemen
 
 - **SessionStart** → Generates a stable unique peer name from the first 8 characters of Claude's `session_id` (same name across resumes, new name for fresh invocations). Spawns a `websocket_hook.py` background process that maintains a WebSocket connection to the daemon. Outputs peer list as context for Claude.
 - **UserPromptSubmit** → Marks peer as BUSY
-- **Stop** → Extracts response from transcript, writes to file. The WebSocket hook picks it up and forwards via WebSocket.
+- **Stop** → Extracts response + tool calls from transcript, posts chat turns to daemon via `/events/chat`, delivers query responses via `/response`.
 - **SessionEnd** → No-op (fires spuriously during agentic loops; the WebSocket hook self-terminates via pane liveness checking ~30s after agent exits)
 - **Notification** (idle_prompt) → Resets BUSY→ONLINE after interrupt
 
@@ -276,17 +276,17 @@ Access your dashboard from anywhere and connect agents across machines via [repo
 repowire setup --relay
 # ✓ Configured agents: claude-code
 # ✓ Relay enabled
-#   Dashboard: https://relay.repowire.io/d/rw_prass_33e7233b0c4cf148/dashboard
+#   Dashboard: https://repowire.io/dashboard
 # ✓ Daemon service installed (launchd)
 ```
 
 Open the dashboard URL from any browser — your local daemon is tunneled through the relay. No port forwarding, no VPN.
 
-**How it works:** Your daemon opens an outbound WebSocket to `relay.repowire.io`. The relay bridges messages between daemons on different machines and proxies HTTP requests (dashboard, API) back through the tunnel.
+**How it works:** Your daemon opens an outbound WebSocket to `repowire.io`. The relay bridges messages between daemons on different machines and proxies HTTP requests (dashboard, API) back through a cookie-authenticated tunnel.
 
 ```
-Browser → repowire.io → enter key → relay proxies via WSS → local daemon → dashboard
-Daemon A ←WSS→ relay.repowire.io ←WSS→ Daemon B (cross-machine mesh)
+Browser → repowire.io → enter key → cookie set → relay proxies via WSS → local daemon → dashboard
+Daemon A ←WSS→ repowire.io ←WSS→ Daemon B (cross-machine mesh)
 ```
 
 You can also self-host the relay:
@@ -308,7 +308,7 @@ daemon:
 
 relay:
   enabled: true                     # Enable remote relay
-  url: "wss://relay.repowire.io"    # Hosted relay (or self-hosted URL)
+  url: "wss://repowire.io"           # Hosted relay (or self-hosted URL)
   api_key: "rw_..."                 # Auto-generated on first `repowire serve --relay`
 
 # Peers auto-register via WebSocket on session start
