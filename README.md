@@ -130,7 +130,7 @@ Agent type is auto-detected during `repowire setup` based on installed CLIs.
 | **Daemon** | System service (launchd/systemd) | Routes messages between peers, `127.0.0.1:8377` |
 | **Hooks** | `~/.claude/settings.json` | Claude Code lifecycle events |
 | **Plugin** | `~/.opencode/plugin/repowire.ts` | OpenCode integration |
-| **MCP Server** | Registered with Claude | `ask_peer`, `list_peers`, `notify_peer`, `broadcast`, `whoami` tools |
+| **MCP Server** | Registered with Claude | `ask_peer`, `list_peers`, `notify_peer`, `broadcast`, `whoami`, `set_description`, `spawn_peer`, `kill_peer` tools |
 | **Config** | `~/.repowire/config.yaml` | Peer registry and settings |
 
 ### Message Flow
@@ -164,6 +164,23 @@ Claude Code doesn't have an API. Repowire uses **hooks** for lifecycle managemen
 OpenCode has a plugin SDK. The repowire plugin (`~/.opencode/plugin/repowire.ts`) maintains a persistent WebSocket connection to the daemon and uses `client.session.prompt()` to inject queries into the active session.
 
 </details>
+
+## MCP Tools
+
+Repowire exposes these tools to connected agents via its MCP server:
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `list_peers` | Query | List all registered peers with status, circle, path, and task description |
+| `ask_peer` | Blocking | Send a question to a peer and wait for their response (300s timeout) |
+| `notify_peer` | Fire-and-forget | Send an async notification to a peer — they can `notify_peer` back when ready |
+| `broadcast` | Fire-and-forget | Send a message to all online peers in your circle |
+| `whoami` | Query | Return your own peer identity (peer_id, name, circle, status) |
+| `set_description` | Mutation | Update your task description, visible to others via `list_peers` |
+| `spawn_peer` | Mutation | Spawn a new coding session in a tmux window (requires [allowlist config](#configuration-reference)) |
+| `kill_peer` | Mutation | Kill a previously spawned session |
+
+`list_peers` and `whoami` return TSV (more token-efficient than JSON for agents). `ask_peer` blocks until the target peer responds or times out; for long-running requests, prefer `notify_peer`.
 
 ## CLI Reference
 
@@ -242,6 +259,16 @@ repowire setup --relay
 ```
 
 Open the dashboard URL from any browser — your local daemon is tunneled through the relay. No port forwarding, no VPN.
+
+<p align="center">
+  <img src="images/repowire-hosted-2.png" alt="Peer grid overview" width="700" />
+</p>
+<p align="center">
+  <img src="images/repowire-hosted-3.png" alt="Activity and message detail" width="700" />
+</p>
+<p align="center">
+  <img src="images/repowire-hosted-1.png" alt="Chat view with relay" width="700" />
+</p>
 
 **How it works:** Your daemon opens an outbound WebSocket to `relay.repowire.io`. The relay bridges messages between daemons on different machines and proxies HTTP requests (dashboard, API) back through the tunnel.
 
