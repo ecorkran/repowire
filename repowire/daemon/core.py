@@ -516,7 +516,8 @@ class PeerManager:
 
     async def _do_repair(self) -> None:
         """Actual repair logic. Must hold _repair_lock."""
-        if not self._transport:
+        transport = self._transport
+        if not transport:
             return
 
         async with self._lock:
@@ -532,13 +533,13 @@ class PeerManager:
             """Returns (peer_id, circle) if alive, None if dead."""
             from repowire.config.models import AgentType
 
-            if not self._transport.is_connected(peer_id):
+            if not transport.is_connected(peer_id):
                 return None  # dead
             # OpenCode peers: if WS connected, they're alive (skip ping)
             if backend == AgentType.OPENCODE:
                 return (peer_id, circle)  # alive, circle unchanged (no pong data)
             try:
-                pong = await self._transport.ping(peer_id, timeout=5.0)
+                pong = await transport.ping(peer_id, timeout=5.0)
                 pong_circle = pong.get("circle")
                 return (peer_id, pong_circle or circle)
             except Exception:
