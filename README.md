@@ -5,7 +5,7 @@
   </picture>
 
   <h1>Repowire</h1>
-  <p>Mesh network for AI coding agents - enables Claude Code and OpenCode sessions to communicate.</p>
+  <p>Mesh network for AI coding agents — enables Claude Code and OpenCode sessions to communicate.</p>
 
   [![PyPI](https://img.shields.io/pypi/v/repowire)](https://pypi.org/project/repowire/)
   [![CI](https://github.com/prassanna-ravishankar/repowire/actions/workflows/ci.yml/badge.svg)](https://github.com/prassanna-ravishankar/repowire/actions/workflows/ci.yml)
@@ -15,22 +15,21 @@
 
 ## Why?
 
-AI coding agents work great in a single repo, but multi-repo projects need a **context breakout** - a way to get information from other codebases. Most solutions are **async context breakouts**: memory banks, docs, persisted context. Repowire is a **sync context breakout**: live agents talking to each other about current code. Your `frontend` Claude can ask `backend` about API shapes and get a real answer from the actual codebase.
+AI coding agents work great in a single repo, but multi-repo projects need a **context breakout** — a way to get information from other codebases. Most solutions are **async context breakouts**: memory banks, docs, persisted context. Repowire is a **sync context breakout**: live agents talking to each other about current code. Your `frontend` Claude can ask `backend` about API shapes and get a real answer from the actual codebase.
 
-Read more about it in my blog where I describe [the context breakout problem](https://prassanna.io/blog/vibe-bottleneck/) and [the idea behind building Repowire](https://prassanna.io/blog/repowire/).
+Read more: [the context breakout problem](https://prassanna.io/blog/vibe-bottleneck/) and [the idea behind Repowire](https://prassanna.io/blog/repowire/).
 
 <details>
-<summary><strong>How does repowire compare with other projects?</strong></summary>
+<summary><strong>How does repowire compare?</strong></summary>
 
 | Project | Type | How it works | Best for |
 |---------|------|--------------|----------|
 | **Repowire** | Sync | Live agent-to-agent queries | Cross-repo collaboration, 5-10 peers |
-| **[Gastown](https://github.com/steveyegge/gastown)** | Async | Work orchestration with persistent mail (beads) | Coordinated fleets, 20-30 agents, single codebase |
-| **[Claude Squad](https://github.com/smtg-ai/claude-squad)** | Isolated | Session management with worktrees | Multiple independent Claude sessions |
-| **[Memory Bank](https://docs.tinyfat.com/guides/memory-bank/)** | Async | Structured markdown files, human-curated | Persistent project knowledge |
-| **[Polyrepo MCP](https://blackdoglabs.io/blog/claude-code-decoded-multi-repo-context)** | Async | MCP server loading cross-repo context | Pre-loaded multi-repo context |
+| **[Gastown](https://github.com/steveyegge/gastown)** | Async | Work orchestration with persistent mail | Coordinated fleets, 20-30 agents |
+| **[Claude Squad](https://github.com/smtg-ai/claude-squad)** | Isolated | Session management with worktrees | Multiple independent sessions |
+| **[Memory Bank](https://docs.tinyfat.com/guides/memory-bank/)** | Async | Structured markdown files | Persistent project knowledge |
 
-**Repowire vs Gastown:** Repowire is a phone call (real-time, ephemeral). Gastown is email + project manager (async, persistent, orchestrated). Repowire bets on emergence - give agents a way to talk and a working methodology develops organically as sessions discover how to best use each other. Gastown bets on structure - Mayor, convoys, formulas. For 5-10 agents, emergence works. For 20-30 grinding through backlogs, you probably need the structure.
+Repowire is a phone call (real-time, ephemeral). Gastown is email + project manager (async, persistent). For 5-10 agents, emergence works. For 20-30 grinding through backlogs, you probably need structure.
 
 </details>
 
@@ -38,41 +37,19 @@ Read more about it in my blog where I describe [the context breakout problem](ht
 https://github.com/user-attachments/assets/e356ce7c-9454-4e41-93af-3991c6f391b9
 
 
-
-## 🎉 Announcing Hosted Relay
-
-Access your dashboard from anywhere and connect agents across machines — no port forwarding, no VPN. Run `repowire setup --relay` and get a public URL instantly via [repowire.io](https://repowire.io).
-
-<p align="center">
-  <img src="images/repowire-hosted-2.png" alt="Peer grid overview" width="700" />
-</p>
-
-<details>
-<summary>More screenshots</summary>
-<br>
-<p align="center">
-  <img src="images/repowire-hosted-3.png" alt="Activity and message detail" width="700" />
-</p>
-<p align="center">
-  <img src="images/repowire-hosted-1.png" alt="Chat view with relay" width="700" />
-</p>
-</details>
-
 ## Installation
 
 **Requirements:** macOS or Linux, Python 3.10+, tmux
 
 ```bash
-# Install from PyPI
 uv tool install repowire
-# or
-pip install repowire
+# or: pip install repowire
 ```
 
 ## Quick Start
 
 ```bash
-# One-time setup - installs hooks, MCP server, and daemon service
+# One-time setup — installs hooks, MCP server, and daemon service
 repowire setup
 
 # Verify everything is running
@@ -94,20 +71,35 @@ The sessions auto-discover each other. In frontend's Claude:
 
 Claude uses the `ask_peer` tool, backend responds, and you get the answer back.
 
-**What just happened?** See [How It Works](#how-it-works) for details.
-
 ## Dashboard
 
-Monitor peer communication at `http://localhost:8377/dashboard` when the daemon is running. For remote access, use `repowire serve --relay` to get a public URL via [repowire.io](https://repowire.io).
+<p align="center">
+  <img src="images/repowire-hosted-2.png" alt="Peer grid overview" width="700" />
+</p>
 
-- Real-time peer status (online/busy/offline)
-- Communication event log with query/response matching
+Monitor your agent mesh at `http://localhost:8377/dashboard`, or remotely via [repowire.io](https://repowire.io):
+
+- **Peer overview** — online/busy/offline status, descriptions, project paths
+- **Chat view** — conversation history per peer with tool call details
+- **Compose bar** — send notifications or queries to any peer from the browser
+- **Mobile responsive** — hamburger menu, touch-friendly compose
+
+For remote access: `repowire setup --relay` connects your daemon to [repowire.io](https://repowire.io) via outbound WebSocket. Access your dashboard from any browser — no port forwarding, no VPN.
+
+<details>
+<summary>More screenshots</summary>
+<br>
+<p align="center">
+  <img src="images/repowire-hosted-3.png" alt="Activity and message detail" width="700" />
+</p>
+<p align="center">
+  <img src="images/repowire-hosted-1.png" alt="Chat view with relay" width="700" />
+</p>
+</details>
 
 ## How It Works
 
-### Architecture
-
-All peers connect to a central daemon via **WebSocket**. The daemon routes messages between peers — it doesn't care what agent type a peer runs. Claude Code and OpenCode peers are treated identically.
+All peers connect to a central daemon via **WebSocket**. The daemon routes addressed messages between peers — no pub/sub, no topics. Messages go from peer A to peer B by name.
 
 ```
 ┌──────────────┐          ┌──────────────┐          ┌──────────────┐
@@ -121,182 +113,67 @@ All peers connect to a central daemon via **WebSocket**. The daemon routes messa
 └──────────────┘
 ```
 
-### Circles
+**Message types:**
+- `ask_peer` — request/response with correlation ID (blocks until answer, 300s timeout)
+- `notify_peer` — fire-and-forget (no response expected)
+- `broadcast` — fan-out to all peers in your circle
 
-Peers are grouped into **circles** (tmux sessions). Peers can only communicate within their circle.
-
-```
-tmux session "dev" (circle)
-├── window "frontend"  →  Claude Code session
-├── window "backend"   →  Claude Code session
-└── window "api"       →  OpenCode session
-```
-
-When you spawn a peer with `--circle dev`, repowire creates (or reuses) a tmux session named "dev" and adds a window for your agent.
-
-### Agent Types
-
-The **agent type** identifies which AI coding tool a peer runs. The daemon treats all types identically — the difference is only in how the agent integrates with repowire.
-
-| Agent Type | Tool | Integration |
-|------------|------|-------------|
-| **claude-code** | Claude Code | Hooks + MCP server + WebSocket hook |
-| **opencode** | OpenCode | TypeScript plugin via SDK |
-
-Agent type is auto-detected during `repowire setup` based on installed CLIs.
-
-### What's Installed
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Daemon** | System service (launchd/systemd) | Routes messages between peers, `127.0.0.1:8377` |
-| **Hooks** | `~/.claude/settings.json` | Claude Code lifecycle events |
-| **Plugin** | `~/.opencode/plugin/repowire.ts` | OpenCode integration |
-| **MCP Server** | Registered with Claude | `ask_peer`, `list_peers`, `notify_peer`, `broadcast`, `whoami`, `set_description`, `spawn_peer`, `kill_peer` tools |
-| **Config** | `~/.repowire/config.yaml` | Peer registry and settings |
-
-### Message Flow
-
-```
-1. Claude calls ask_peer("backend", "What endpoints exist?")
-2. MCP server → HTTP POST /query → Daemon
-3. Daemon routes query via WebSocket to backend's hook/plugin
-4. Backend agent processes, responds
-5. Response flows back via WebSocket → Daemon → MCP → Claude
-```
+**Circles** are logical subnets (mapped to tmux sessions). Peers can only communicate within their circle unless explicitly bypassed.
 
 <details>
 <summary><strong>Claude Code integration details</strong></summary>
 
-Claude Code doesn't have an API. Repowire uses **hooks** for lifecycle management and a **persistent WebSocket process** for message delivery:
+Claude Code doesn't have a messaging API. Repowire uses **hooks** for lifecycle and a **persistent WebSocket process** for message delivery:
 
-- **SessionStart** → Generates a stable unique peer name from the first 8 characters of Claude's `session_id` (same name across resumes, new name for fresh invocations). Spawns a `websocket_hook.py` background process that maintains a WebSocket connection to the daemon. Outputs peer list as context for Claude.
-- **UserPromptSubmit** → Marks peer as BUSY
-- **Stop** → Extracts response + tool calls from transcript, posts chat turns to daemon via `/events/chat`, delivers query responses via `/response`.
-- **SessionEnd** → No-op (fires spuriously during agentic loops; the WebSocket hook self-terminates via pane liveness checking ~30s after agent exits)
-- **Notification** (idle_prompt) → Resets BUSY→ONLINE after interrupt
+- **SessionStart** — registers peer, spawns WebSocket hook (with PID dedup for ephemeral sub-sessions), injects peer list as context
+- **UserPromptSubmit** — marks peer BUSY
+- **Stop** — extracts response + tool calls from transcript, posts chat turns via `/events/chat`, delivers query responses via `/response`
+- **Notification** (idle_prompt) — resets BUSY→ONLINE after interrupt
 
-**Peer State Machine:** `OFFLINE → ONLINE ↔ BUSY`
+Peer state machine: `OFFLINE → ONLINE ↔ BUSY`
 
 </details>
 
 <details>
 <summary><strong>OpenCode integration details</strong></summary>
 
-OpenCode has a plugin SDK. The repowire plugin (`~/.opencode/plugin/repowire.ts`) maintains a persistent WebSocket connection to the daemon and uses `client.session.prompt()` to inject queries into the active session.
+OpenCode has a plugin SDK. The repowire plugin (`~/.opencode/plugin/repowire.ts`) maintains a persistent WebSocket connection and uses `client.session.prompt()` to inject queries.
 
 </details>
 
 ## MCP Tools
 
-Repowire exposes these tools to connected agents via its MCP server:
-
 | Tool | Type | Description |
 |------|------|-------------|
-| `list_peers` | Query | List all registered peers with status, circle, path, and task description |
-| `ask_peer` | Blocking | Send a question to a peer and wait for their response (300s timeout) |
-| `notify_peer` | Fire-and-forget | Send an async notification to a peer — they can `notify_peer` back when ready |
-| `broadcast` | Fire-and-forget | Send a message to all online peers in your circle |
-| `whoami` | Query | Return your own peer identity (peer_id, name, circle, status) |
-| `set_description` | Mutation | Update your task description, visible to others via `list_peers` |
-| `spawn_peer` | Mutation | Spawn a new coding session in a tmux window (requires [allowlist config](#configuration-reference)) |
+| `list_peers` | Query | List all peers with status, circle, path, description |
+| `ask_peer` | Blocking | Send a question and wait for the response |
+| `notify_peer` | Fire-and-forget | Send a notification — peer can `notify_peer` back when ready |
+| `broadcast` | Fire-and-forget | Message all online peers in your circle |
+| `whoami` | Query | Your own peer identity |
+| `set_description` | Mutation | Update your task description, visible to all peers and the dashboard |
+| `spawn_peer` | Mutation | Spawn a new agent session (requires [allowlist config](#configuration-reference)) |
 | `kill_peer` | Mutation | Kill a previously spawned session |
 
-`list_peers` and `whoami` return TSV (more token-efficient than JSON for agents). `ask_peer` blocks until the target peer responds or times out; for long-running requests, prefer `notify_peer`.
+`list_peers` and `whoami` return TSV (more token-efficient than JSON). For long-running requests, prefer `notify_peer` over `ask_peer`.
 
 ## CLI Reference
 
 ```bash
-# Main commands
 repowire setup                    # Install hooks, MCP server, daemon service
 repowire setup --relay            # Same + enable remote dashboard via repowire.io
-repowire setup --no-service       # Skip daemon service (run manually with 'serve')
 repowire status                   # Show what's installed and running
-repowire uninstall                # Remove all components
-
-# Daemon
 repowire serve                    # Run daemon in foreground
-repowire build-ui                 # Build web dashboard (development)
+repowire serve --relay            # Run daemon with relay connection
 
-# Peer management
-repowire peer list                # List peers and their status
 repowire peer new PATH            # Spawn new peer in tmux
 repowire peer new . --circle dev  # Spawn with custom circle
-repowire peer ask NAME "query"    # Send a query (testing utility)
+repowire peer list                # List peers and their status
 repowire peer prune               # Remove offline peers
+
+repowire uninstall                # Remove all components
 ```
 
-<details>
-<summary>Advanced commands (hidden from <code>--help</code>)</summary>
-
-```bash
-# Agent-specific
-repowire claude status            # Check hooks installation
-repowire opencode status          # Check plugin installation
-
-# Service management
-repowire service install          # Install daemon as system service
-repowire service restart          # Restart daemon service
-repowire service uninstall        # Remove system service
-repowire service status           # Check service status
-
-# Config
-repowire config show              # Show current configuration
-repowire config path              # Show config file path
-```
-
-</details>
-
-## Advanced
-
-### Security
-
-**WebSocket Authentication (Optional)**
-
-To require authentication for WebSocket connections, add `auth_token` to your config:
-
-```yaml
-# ~/.repowire/config.yaml
-daemon:
-  auth_token: "your-secret-token-here"
-```
-
-For OpenCode peers, set the environment variable:
-```bash
-export REPOWIRE_AUTH_TOKEN="your-secret-token-here"
-```
-
-The daemon also restricts CORS to localhost origins only.
-
-### Remote Dashboard & Multi-Machine Relay
-
-Access your dashboard from anywhere and connect agents across machines via [repowire.io](https://repowire.io).
-
-```bash
-repowire setup --relay
-# ✓ Configured agents: claude-code
-# ✓ Relay enabled
-#   Dashboard: https://repowire.io/dashboard
-# ✓ Daemon service installed (launchd)
-```
-
-Open the dashboard URL from any browser — your local daemon is tunneled through the relay. No port forwarding, no VPN.
-
-**How it works:** Your daemon opens an outbound WebSocket to `repowire.io`. The relay bridges messages between daemons on different machines and proxies HTTP requests (dashboard, API) back through a cookie-authenticated tunnel.
-
-```
-Browser → repowire.io → enter key → cookie set → relay proxies via WSS → local daemon → dashboard
-Daemon A ←WSS→ repowire.io ←WSS→ Daemon B (cross-machine mesh)
-```
-
-You can also self-host the relay:
-
-```bash
-repowire relay start --port 8000
-repowire relay generate-key --user-id myuser
-```
-
-### Configuration Reference
+## Configuration
 
 Config file: `~/.repowire/config.yaml`
 
@@ -304,22 +181,53 @@ Config file: `~/.repowire/config.yaml`
 daemon:
   host: "127.0.0.1"
   port: 8377
-  auth_token: "optional-secret"  # Optional: require auth for WebSocket connections
+  auth_token: "optional-secret"     # Require auth for WebSocket connections
+
+  # Allow agents to spawn new sessions via MCP (both lists must be non-empty)
+  spawn:
+    allowed_commands:
+      - claude
+      - claude --dangerously-skip-permissions
+    allowed_paths:
+      - ~/git
+      - ~/projects
 
 relay:
-  enabled: true                     # Enable remote relay
-  url: "wss://repowire.io"           # Hosted relay (or self-hosted URL)
+  enabled: true                     # Connect to hosted relay
+  url: "wss://repowire.io"
   api_key: "rw_..."                 # Auto-generated on first `repowire serve --relay`
-
-# Peers auto-register via WebSocket on session start
-peers:
-  frontend:
-    name: frontend
-    path: "/path/to/frontend"
-    tmux_session: "dev:frontend"
-    metadata:
-      branch: "main"  # auto-detected from git
 ```
+
+Peers auto-register via WebSocket on session start — no manual config needed.
+
+<details>
+<summary><strong>Remote relay details</strong></summary>
+
+```bash
+repowire setup --relay
+# ✓ Relay enabled
+#   Dashboard: https://repowire.io/dashboard
+```
+
+Your daemon opens an outbound WebSocket to `repowire.io`. The relay bridges messages between daemons on different machines and proxies HTTP requests (dashboard, API) back through a cookie-authenticated tunnel.
+
+```
+Browser → repowire.io → enter key → cookie set → relay tunnels to local daemon
+Daemon A ←WSS→ repowire.io ←WSS→ Daemon B (cross-machine mesh)
+```
+
+Self-host the relay: `repowire relay start --port 8000`
+
+</details>
+
+<details>
+<summary><strong>Security</strong></summary>
+
+- **WebSocket auth** — set `daemon.auth_token` in config to require bearer token for connections
+- **CORS** — restricted to localhost origins (plus `repowire.io` when relay is enabled)
+- **Spawn allowlist** — `daemon.spawn.allowed_commands` and `allowed_paths` must both be non-empty for MCP spawn to work
+
+</details>
 
 ## License
 
