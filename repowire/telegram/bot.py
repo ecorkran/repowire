@@ -120,15 +120,9 @@ class TelegramPeer:
         text = msg.get("text", "")
 
         if t == "notify":
-            await self._tg_send(
-                f"*@{_esc(who)}*\n{_esc(text)}",
-                _kb([[("💬 Reply", f"target:{who}")]]),
-            )
+            await self._tg_send(f"*@{_esc(who)}*\n{_esc(text)}")
         elif t == "query":
-            await self._tg_send(
-                f"❓ *@{_esc(who)}*\n{_esc(text)}",
-                _kb([[("💬 Reply", f"target:{who}")]]),
-            )
+            await self._tg_send(f"❓ *@{_esc(who)}*\n{_esc(text)}")
         elif t == "broadcast":
             await self._tg_send(f"📢 *@{_esc(who)}*\n{_esc(text)}")
         elif t == "ping" and self._ws:
