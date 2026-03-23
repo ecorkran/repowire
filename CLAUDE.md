@@ -42,6 +42,7 @@ MessageRouter  QueryTracker   WebSocketTransport
 - `hooks/` — Claude Code lifecycle (session, stop, prompt, notification, websocket_hook)
 - `relay/server.py` — hosted relay at repowire.io (WebSocket bridge + HTTP tunnel)
 - `mcp/server.py` — MCP tools (list_peers, ask_peer, notify_peer, broadcast, whoami, set_description, spawn_peer, kill_peer)
+- `telegram/bot.py` — Telegram bot peer (mobile mesh control via inline buttons)
 
 ## Design Philosophy: Lazy Repair
 
@@ -108,3 +109,17 @@ Peers auto-register via WebSocket on session start — no manual config.
 - Events: 500-item circular buffer, persisted to `~/.repowire/events.json`
 - Tool calls: stop hook extracts from transcript JSONL, included in `chat_turn` events
 - Build: `repowire build-ui` or `cd web && npm run dev`
+
+## Telegram Bot
+
+Mobile mesh control via Telegram. Registers as a peer, bridges messages bidirectionally.
+
+```bash
+TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... repowire telegram start
+```
+
+- `telegram/bot.py` — bot implementation (~230 lines, zero extra deps)
+- Button-first UX: `/peers` shows inline keyboards, tap to select reply target
+- Incoming notifications → Telegram messages with [Reply] button
+- Special peers: `@telegram` and `@dashboard` are human — context injection tells agents
+- Token stored in env vars, never in URLs (httpx base_url pattern)
