@@ -71,7 +71,9 @@ The sessions auto-discover each other. In frontend's Claude:
 
 Claude uses the `ask_peer` tool, backend responds, and you get the answer back.
 
-## Dashboard
+## Control Plane
+
+### Web Dashboard
 
 <p align="center">
   <img src="images/repowire-hosted-2.png" alt="Peer grid overview" width="700" />
@@ -96,6 +98,22 @@ For remote access: `repowire setup --relay` connects your daemon to [repowire.io
   <img src="images/repowire-hosted-1.png" alt="Chat view with relay" width="700" />
 </p>
 </details>
+
+### Telegram Bot
+
+Control your mesh from your phone. A Telegram bot registers as a peer — notifications from agents appear in your chat, messages you send get routed to peers.
+
+```bash
+# 1. Create a bot via @BotFather on Telegram — get your token
+# 2. Get your chat ID from @userinfobot
+# 3. Run the bot
+TELEGRAM_BOT_TOKEN="..." TELEGRAM_CHAT_ID="..." repowire telegram start
+```
+
+- `/peers` — shows online peers with inline 📨 buttons
+- Tap a peer → type your message → sent as notification
+- Incoming notifications appear with [💬 Reply] buttons
+- Agents know `@telegram` is you — they can `notify_peer('telegram', ...)` to reach your phone
 
 ## How It Works
 
@@ -170,6 +188,7 @@ repowire peer new . --circle dev  # Spawn with custom circle
 repowire peer list                # List peers and their status
 repowire peer prune               # Remove offline peers
 
+repowire telegram start           # Run Telegram bot (needs env vars)
 repowire uninstall                # Remove all components
 ```
 
