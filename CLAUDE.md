@@ -146,7 +146,17 @@ Hosted at repowire.io. Daemon connects outbound via WSS. Cookie-based auth for d
 - Next.js static export at `localhost:8377/dashboard`, remote at `repowire.io/dashboard`
 - Events: 500-item circular buffer, persisted to `~/.repowire/events.json`
 - Tool calls: stop hook extracts from transcript JSONL, included in `chat_turn` events
+- File uploads: 📎 button in compose bar, uploads to `POST /attachments`, path included in notification
 - Build: `repowire build-ui` or `cd web && npm run dev`
+
+## Attachments
+
+- `daemon/routes/attachments.py` — `POST /attachments` (upload, 10MB limit) + `GET /attachments/{id}` (download)
+- Storage: `~/.repowire/attachments/` with 24h TTL auto-cleanup
+- Telegram: bot downloads photos, uploads to daemon, includes path in notification
+- Dashboard: compose bar has file upload, tunneled through relay
+- Claude reads images via Read tool (multimodal) using the local file path
+- Relay tunnel: `/attachments` in `_TUNNEL_PREFIXES`, WS `max_size=16MB` for base64 payloads
 
 ## Telegram Bot
 

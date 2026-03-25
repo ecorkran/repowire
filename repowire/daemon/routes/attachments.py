@@ -56,7 +56,7 @@ async def upload_attachment(
     dest = _ensure_dir() / f"{attachment_id}{ext}"
 
     size = 0
-    with open(dest, "wb") as f:
+    with open(dest, "wb") as out:
         while chunk := await file.read(8192):
             size += len(chunk)
             if size > MAX_FILE_SIZE:
@@ -65,7 +65,7 @@ async def upload_attachment(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024}MB)",
                 )
-            f.write(chunk)
+            out.write(chunk)
 
     logger.info("Attachment saved: %s (%d bytes)", dest.name, size)
 
