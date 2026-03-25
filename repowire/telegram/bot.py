@@ -250,21 +250,21 @@ class TelegramPeer:
                 await self._tg_send("Failed to get photo from Telegram\\.")
                 return
 
-            # Download the photo
-            photo_r = await self._http.get(
-                f"https://api.telegram.org/file/bot"
-                f"{self._bot_path.removeprefix('/bot')}/{file_path}",
-            )
+            # Download the photo (need a separate client — self._http has TG base_url)
+            async with httpx.AsyncClient() as dl:
+                token = self._bot_path.removeprefix("/bot")
+                photo_r = await dl.get(
+                    f"https://api.telegram.org/file/bot{token}/{file_path}",
+                    timeout=15.0,
+                )
 
             # Upload to daemon
-            daemon_http = self._daemon_url.replace("ws://", "http://").replace(
-                "wss://", "https://"
-            )
-            upload_r = await self._http.post(
-                f"{daemon_http}/attachments",
-                files={"file": (file_path.split("/")[-1], photo_r.content, "image/jpeg")},
-                timeout=15.0,
-            )
+            async with httpx.AsyncClient() as ul:
+                upload_r = await ul.post(
+                    f"{self._daemon_url}/attachments",
+                    files={"file": (file_path.split("/")[-1], photo_r.content, "image/jpeg")},
+                    timeout=15.0,
+                )
 
             if upload_r.status_code != 200:
                 await self._tg_send("Failed to upload photo\\.")
