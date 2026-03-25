@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { RefreshCw, Send } from "lucide-react";
+import { Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { Peer } from "../types";
 import { peerLabel } from "../types";
@@ -18,9 +18,10 @@ export function ComposeBar({ peer, apiBase, onSent }: ComposeBarProps) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -28,31 +29,60 @@ export function ComposeBar({ peer, apiBase, onSent }: ComposeBarProps) {
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [text]);
 
+  const uploadFile = async (f: File): Promise<string | null> => {
+    const formData = new FormData();
+    formData.append("file", f);
+    try {
+      const res = await fetch(`${apiBase}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.path as string;
+    } catch {
+      return null;
+    }
+  };
+
   const submit = async () => {
-    if (!text.trim() || isPending) return;
+    if ((!text.trim() && !file) || isPending) return;
     setError(null);
     setResponse(null);
     setIsPending(true);
 
     try {
+      let msg = text.trim();
+
+      // Upload attachment if present
+      if (file) {
+        const path = await uploadFile(file);
+        if (!path) {
+          setError("Failed to upload file");
+          return;
+        }
+        msg = msg ? `${msg}\n[Attachment: ${path}]` : `[Attachment: ${path}]`;
+      }
+
       if (mode === "notify") {
         const res = await fetch(`${apiBase}/notify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ from_peer: "dashboard", to_peer: peer.name, text: text.trim(), bypass_circle: true }),
+          body: JSON.stringify({ from_peer: "dashboard", to_peer: peer.name, text: msg, bypass_circle: true }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           setError(body.detail || `Error ${res.status}`);
         } else {
           setText("");
+          setFile(null);
           if (onSent) setTimeout(onSent, 1000);
         }
       } else {
         const res = await fetch(`${apiBase}/query`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ from_peer: "dashboard", to_peer: peer.name, text: text.trim(), bypass_circle: true }),
+          body: JSON.stringify({ from_peer: "dashboard", to_peer: peer.name, text: msg, bypass_circle: true }),
         });
         const data = await res.json();
         if (data.error) {
@@ -60,6 +90,7 @@ export function ComposeBar({ peer, apiBase, onSent }: ComposeBarProps) {
         } else {
           setResponse(data.text ?? null);
           setText("");
+          setFile(null);
           if (onSent) setTimeout(onSent, 1000);
         }
       }
@@ -103,24 +134,52 @@ export function ComposeBar({ peer, apiBase, onSent }: ComposeBarProps) {
         <span className="ml-auto text-[10px] text-zinc-600 hidden sm:inline">⌘↵ to send</span>
       </div>
 
-      {/* Textarea */}
-      <textarea
-        ref={textareaRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder={mode === "notify" ? `Notify ${peerLabel(peer)}...` : `Ask ${peerLabel(peer)}...`}
-        rows={1}
-        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
-      />
+      {/* File preview */}
+      {file && (
+        <div className="flex items-center gap-2 px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-400">
+          <Paperclip className="w-3 h-3 shrink-0" />
+          <span className="truncate flex-1">{file.name}</span>
+          <span className="text-zinc-600 shrink-0">{(file.size / 1024).toFixed(0)}KB</span>
+          <button onClick={() => setFile(null)} className="p-0.5 hover:text-zinc-200">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
-      {/* Send button — full width on mobile */}
+      {/* Textarea + attach */}
+      <div className="flex gap-2 items-end">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={mode === "notify" ? `Notify ${peerLabel(peer)}...` : `Ask ${peerLabel(peer)}...`}
+          rows={1}
+          className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+          title="Attach file"
+        >
+          <Paperclip className="w-4 h-4" />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,.pdf,.txt,.json,.csv,.md"
+          className="hidden"
+          onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }}
+        />
+      </div>
+
+      {/* Send button */}
       <button
         onClick={submit}
-        disabled={!text.trim() || isPending}
+        disabled={(!text.trim() && !file) || isPending}
         className={cn(
           "w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors",
-          text.trim()
+          (text.trim() || file)
             ? "bg-emerald-600 hover:bg-emerald-500 text-white"
             : "bg-zinc-800 text-zinc-500",
           "disabled:opacity-40 disabled:cursor-not-allowed"
