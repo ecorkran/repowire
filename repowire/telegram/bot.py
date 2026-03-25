@@ -154,10 +154,22 @@ class TelegramPeer:
             if str(cb.get("message", {}).get("chat", {}).get("id")) == self._chat_id:
                 await self._on_callback(cb)
             return
-        # Text message
+        # Message
         m = u.get("message", {})
+        chat_id = str(m.get("chat", {}).get("id", ""))
+        if chat_id != self._chat_id:
+            return
+
+        # Photo
+        photos = m.get("photo", [])
+        if photos:
+            caption = m.get("caption", "").strip()
+            await self._on_photo(photos[-1], caption)
+            return
+
+        # Text
         text = m.get("text", "")
-        if str(m.get("chat", {}).get("id")) == self._chat_id and text:
+        if text:
             await self._on_text(text.strip())
 
     async def _on_callback(self, cb: dict) -> None:
@@ -217,6 +229,54 @@ class TelegramPeer:
             "`/select name` — start conversation\n"
             "`@name msg` — quick message"
         )
+
+    async def _on_photo(self, photo: dict, caption: str) -> None:
+        """Handle incoming Telegram photo — upload to daemon, notify peer."""
+        if not self._reply_target:
+            await self._tg_send(
+                "Select a peer first with /select or /peers, then send the photo\\."
+            )
+            return
+
+        try:
+            # Get file path from Telegram
+            file_id = photo.get("file_id", "")
+            r = await self._http.get(
+                f"{self._bot_path}/getFile",
+                params={"file_id": file_id},
+            )
+            file_path = r.json().get("result", {}).get("file_path", "")
+            if not file_path:
+                await self._tg_send("Failed to get photo from Telegram\\.")
+                return
+
+            # Download the photo
+            photo_r = await self._http.get(
+                f"https://api.telegram.org/file/bot"
+                f"{self._bot_path.removeprefix('/bot')}/{file_path}",
+            )
+
+            # Upload to daemon
+            daemon_http = self._daemon_url.replace("ws://", "http://").replace(
+                "wss://", "https://"
+            )
+            upload_r = await self._http.post(
+                f"{daemon_http}/attachments",
+                files={"file": (file_path.split("/")[-1], photo_r.content, "image/jpeg")},
+                timeout=15.0,
+            )
+
+            if upload_r.status_code != 200:
+                await self._tg_send("Failed to upload photo\\.")
+                return
+
+            att = upload_r.json()
+            msg = caption or "Photo attached"
+            msg += f"\n[Attachment: {att['path']}]"
+
+            await self._notify(self._reply_target, msg)
+        except Exception as e:
+            await self._tg_send(f"Error: {_esc(str(e))}")
 
     # -- Commands --
 

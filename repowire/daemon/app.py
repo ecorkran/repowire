@@ -23,7 +23,7 @@ from repowire.daemon.message_router import MessageRouter
 from repowire.daemon.peer_registry import PeerRegistry
 from repowire.daemon.query_tracker import QueryTracker
 from repowire.daemon.relay_client import RelayClient
-from repowire.daemon.routes import health, messages, peers, websocket
+from repowire.daemon.routes import attachments, health, messages, peers, websocket
 from repowire.daemon.routes import spawn as spawn_routes
 from repowire.daemon.websocket_transport import WebSocketTransport
 
@@ -147,6 +147,7 @@ def create_app(
     app.include_router(messages.router)
     app.include_router(websocket.router)
     app.include_router(spawn_routes.router)
+    app.include_router(attachments.router)
 
     # --- Static File Serving (Dashboard) ---
     web_out = _find_web_output_dir()
@@ -268,6 +269,7 @@ def create_test_app(
     app.include_router(messages.router)
     app.include_router(websocket.router)
     app.include_router(spawn_routes.router)
+    app.include_router(attachments.router)
 
     return app
 
