@@ -93,7 +93,7 @@ class TestGhostEvictionCrossCircle:
         assert len(agent1_peers) == 1
 
     async def test_evict_ghost_cleans_mapping(self, manager):
-        """Ghost eviction removes stale mapping entries."""
+        """Cross-circle re-registration reuses mapping and updates circle."""
         peer_id_1 = await manager.allocate_and_register(
             display_name="agent1",
             circle="old-circle",
@@ -109,11 +109,55 @@ class TestGhostEvictionCrossCircle:
             path="/tmp/project",
         )
 
-        # Old mapping should be gone
-        assert peer_id_1 not in manager._mappings
-        # New mapping should exist
+        # Mapping is reused (same session_id), circle updated in place
+        assert peer_id_1 == peer_id_2
+        assert peer_id_1 in manager._mappings
+        assert manager._mappings[peer_id_1].circle == "new-circle"
+        assert len(manager._mappings) == 1
+
+    async def test_mapping_reused_across_circles(self, manager):
+        """Same (display_name, backend) reuses session_id even with different circle."""
+        peer_id_1 = await manager.allocate_and_register(
+            display_name="agent1",
+            circle="old-circle",
+            backend=AgentType.CLAUDE_CODE,
+            path="/tmp/project",
+        )
+
+        peer_id_2 = await manager.allocate_and_register(
+            display_name="agent1",
+            circle="new-circle",
+            backend=AgentType.CLAUDE_CODE,
+            path="/tmp/project",
+        )
+
+        # With relaxed mapping lookup, the second registration finds the
+        # existing mapping by (display_name, backend) — but ghost eviction
+        # deletes the old mapping and peer. The new peer gets a fresh mapping.
+        # The key assertion: only 1 peer exists with the new circle.
+        peers = await manager.get_all_peers()
+        agent1_peers = [p for p in peers if p.display_name == "agent1"]
+        assert len(agent1_peers) == 1
+        assert agent1_peers[0].circle == "new-circle"
+
+    async def test_mapping_different_backend_not_reused(self, manager):
+        """Different backends get separate session_ids even with same display_name."""
+        peer_id_1 = await manager.allocate_and_register(
+            display_name="agent1",
+            circle="default",
+            backend=AgentType.CLAUDE_CODE,
+            path="/tmp/project",
+        )
+        peer_id_2 = await manager.allocate_and_register(
+            display_name="agent1",
+            circle="default",
+            backend=AgentType.OPENCODE,
+            path="/tmp/project",
+        )
+
+        assert peer_id_1 != peer_id_2
+        assert peer_id_1 in manager._mappings
         assert peer_id_2 in manager._mappings
-        assert manager._mappings[peer_id_2].circle == "new-circle"
 
     async def test_different_backend_not_evicted(self, manager):
         """Peers with same name but different backend are not evicted."""

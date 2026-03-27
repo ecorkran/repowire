@@ -248,9 +248,9 @@ class PeerRegistry:
         for sid, mapping in self._mappings.items():
             if (
                 mapping.display_name == display_name
-                and mapping.circle == circle
                 and mapping.backend == backend
             ):
+                mapping.circle = circle
                 mapping.path = path
                 mapping.updated_at = datetime.now(timezone.utc).isoformat()
                 logger.info(f"Reusing session {sid} for {display_name}@{circle}")
