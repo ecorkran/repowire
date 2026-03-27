@@ -159,6 +159,25 @@ class TestGhostEvictionCrossCircle:
         assert peer_id_1 in manager._mappings
         assert peer_id_2 in manager._mappings
 
+    async def test_same_name_different_circle_different_path_coexist(self, manager):
+        """Same name in different circles with different paths are NOT evicted."""
+        await manager.allocate_and_register(
+            display_name="myproject",
+            circle="teamA",
+            backend=AgentType.CLAUDE_CODE,
+            path="/home/alice/myproject",
+        )
+        await manager.allocate_and_register(
+            display_name="myproject",
+            circle="teamB",
+            backend=AgentType.CLAUDE_CODE,
+            path="/home/bob/myproject",
+        )
+
+        peers = await manager.get_all_peers()
+        myproject_peers = [p for p in peers if p.display_name == "myproject"]
+        assert len(myproject_peers) == 2
+
     async def test_different_backend_not_evicted(self, manager):
         """Peers with same name but different backend are not evicted."""
         await manager.allocate_and_register(

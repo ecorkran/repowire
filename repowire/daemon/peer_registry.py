@@ -249,6 +249,7 @@ class PeerRegistry:
             if (
                 mapping.display_name == display_name
                 and mapping.backend == backend
+                and (mapping.circle == circle or (path and mapping.path == path))
             ):
                 mapping.circle = circle
                 mapping.path = path
@@ -270,19 +271,31 @@ class PeerRegistry:
         return session_id
 
     def _evict_ghosts(
-        self, display_name: str, backend: AgentType, new_peer_id: str, circle: str,
+        self,
+        display_name: str,
+        backend: AgentType,
+        new_peer_id: str,
+        circle: str,
+        path: str | None = None,
     ) -> None:
         """Evict stale peers with same (display_name, backend). Must hold lock.
 
-        Matches regardless of circle — a peer identity is unique per
-        (display_name, backend). This prevents duplicates when the same
-        agent registers via different transports with different circles.
+        Evicts when any of these conditions hold (beyond name+backend+different id):
+        - Same circle (original behavior)
+        - Old peer is OFFLINE (original behavior)
+        - Same working directory path (cross-transport duplicate: hook registered
+          with tmux circle, channel registered with "default", but same project)
         """
         for old_sid, old_peer in list(self._peers.items()):
             if (
                 old_peer.display_name == display_name
                 and old_peer.backend == backend
                 and old_sid != new_peer_id
+                and (
+                    old_peer.circle == circle
+                    or old_peer.status == PeerStatus.OFFLINE
+                    or (path and old_peer.path == path)
+                )
             ):
                 del self._peers[old_sid]
                 if old_sid in self._mappings:
@@ -312,7 +325,7 @@ class PeerRegistry:
         """
         async with self._lock:
             peer_id = self._find_or_allocate_mapping(display_name, circle, backend, path)
-            self._evict_ghosts(display_name, backend, peer_id, circle)
+            self._evict_ghosts(display_name, backend, peer_id, circle, path=path)
 
             # --- create and insert Peer ---
             peer = Peer(
