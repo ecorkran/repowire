@@ -9,6 +9,7 @@ CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 CLAUDE_JSON = Path.home() / ".claude.json"
 
 HOOK_EVENTS = ["Stop", "SessionStart", "SessionEnd", "UserPromptSubmit", "Notification"]
+LEGACY_HOOK_EVENTS = ["SessionStart", "SessionEnd", "UserPromptSubmit", "Notification"]
 
 # Channel transport requires Claude Code v2.1.80+ with claude.ai login
 CHANNEL_MIN_VERSION = (2, 1, 80)
@@ -31,6 +32,14 @@ def _save_claude_settings(settings: dict) -> None:
     CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     with open(CLAUDE_SETTINGS, "w") as f:
         json.dump(settings, f, indent=2)
+
+
+def _is_repowire_hook(entry: dict) -> bool:
+    """Check if a hook entry belongs to repowire."""
+    for hook in entry.get("hooks", []):
+        if hook.get("command", "").startswith("repowire"):
+            return True
+    return False
 
 
 def _make_hook_config(command: str) -> dict:
@@ -73,6 +82,19 @@ def install_hooks(channel_mode: bool = False) -> bool:
         settings["hooks"]["Notification"] = [
             _make_notification_hook_config("repowire hook notification", "idle_prompt")
         ]
+    else:
+        # Channel mode: remove legacy repowire hooks, preserve non-repowire hooks
+        for event in LEGACY_HOOK_EVENTS:
+            if event not in settings["hooks"]:
+                continue
+            filtered = [
+                entry for entry in settings["hooks"][event]
+                if not _is_repowire_hook(entry)
+            ]
+            if filtered:
+                settings["hooks"][event] = filtered
+            else:
+                del settings["hooks"][event]
 
     _save_claude_settings(settings)
     return True
