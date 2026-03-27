@@ -272,15 +272,22 @@ class PeerRegistry:
     def _evict_ghosts(
         self, display_name: str, backend: AgentType, new_peer_id: str, circle: str,
     ) -> None:
-        """Evict stale peers with same (display_name, backend). Must hold lock."""
+        """Evict stale peers with same (display_name, backend). Must hold lock.
+
+        Matches regardless of circle — a peer identity is unique per
+        (display_name, backend). This prevents duplicates when the same
+        agent registers via different transports with different circles.
+        """
         for old_sid, old_peer in list(self._peers.items()):
             if (
                 old_peer.display_name == display_name
                 and old_peer.backend == backend
                 and old_sid != new_peer_id
-                and (old_peer.circle == circle or old_peer.status == PeerStatus.OFFLINE)
             ):
                 del self._peers[old_sid]
+                if old_sid in self._mappings:
+                    del self._mappings[old_sid]
+                    self._mappings_dirty = True
 
     # ------------------------------------------------------------------
     # Allocate + register (atomic, the preferred public API)
