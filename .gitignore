@@ -12,6 +12,10 @@ build/
 .repowire/
 ui/
 
+# Channel transport (bun)
+repowire/channel/node_modules/
+repowire/channel/bun.lock
+
 # Debug artifacts
 .gemini-clipboard/
 .playwright-mcp/
