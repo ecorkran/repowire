@@ -21,10 +21,27 @@ import WebSocket from "ws";
 // -- Config --
 
 const DAEMON_URL = process.env.REPOWIRE_DAEMON_URL ?? "ws://127.0.0.1:8377";
-const DISPLAY_NAME =
-  (process.env.CLAUDE_SESSION_ID ?? "").slice(0, 8) || "channel";
-const CIRCLE = process.env.REPOWIRE_CIRCLE ?? "default";
 const PROJECT_PATH = process.cwd();
+
+async function loadProjectConfig(): Promise<{ circle?: string; display_name?: string }> {
+  try {
+    const text = await Bun.file(`${PROJECT_PATH}/.repowire.yaml`).text();
+    const result: { circle?: string; display_name?: string } = {};
+    for (const line of text.split("\n")) {
+      const m = line.match(/^\s*(circle|display_name)\s*:\s*(.+?)\s*$/);
+      if (m) result[m[1] as "circle" | "display_name"] = m[2].replace(/^["']|["']$/g, "");
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+const projectConfig = await loadProjectConfig();
+const _sessionPrefix = (process.env.CLAUDE_SESSION_ID ?? "").slice(0, 8);
+const _folderName = PROJECT_PATH.split("/").pop() || "repowire";
+let displayName = projectConfig.display_name || _sessionPrefix || _folderName;
+const CIRCLE = process.env.REPOWIRE_CIRCLE || projectConfig.circle || "default";
 
 // -- Daemon WebSocket --
 
@@ -42,7 +59,7 @@ function connectDaemon(mcp: Server): void {
     ws!.send(
       JSON.stringify({
         type: "connect",
-        display_name: DISPLAY_NAME,
+        display_name: displayName,
         circle: CIRCLE,
         backend: "claude-code",
         path: PROJECT_PATH,
@@ -130,7 +147,7 @@ async function fetchPeerContext(): Promise<string> {
     if (online.length === 0) return "";
 
     const lines = online
-      .filter((p) => p.display_name !== DISPLAY_NAME)
+      .filter((p) => p.display_name !== displayName)
       .map((p) => {
         const name = p.display_name ?? p.name ?? "?";
         const folder = (p.path ?? "").split("/").pop() || name;
@@ -179,7 +196,7 @@ const mcp = new Server(
   }
 );
 
-// -- Reply tool --
+// -- Tools --
 
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -202,6 +219,20 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["correlation_id", "text"],
       },
     },
+    {
+      name: "set_display_name",
+      description: "Update your display name in the repowire mesh. Visible to other peers via list_peers.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          display_name: {
+            type: "string",
+            description: "New display name (e.g., 'frontend', 'api-worker')",
+          },
+        },
+        required: ["display_name"],
+      },
+    },
   ],
 }));
 
@@ -209,6 +240,8 @@ const ReplyArgs = z.object({
   correlation_id: z.string(),
   text: z.string(),
 });
+
+const SetDisplayNameArgs = z.object({ display_name: z.string().min(1) });
 
 mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (req.params.name === "reply") {
@@ -231,6 +264,25 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       ],
     };
   }
+
+  if (req.params.name === "set_display_name") {
+    const { display_name } = SetDisplayNameArgs.parse(req.params.arguments);
+    if (!sessionId) {
+      return { content: [{ type: "text" as const, text: "Error: not connected to daemon." }] };
+    }
+    const httpUrl = DAEMON_URL.replace("ws://", "http://").replace("wss://", "https://");
+    const resp = await fetch(`${httpUrl}/peers/${sessionId}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name }),
+    });
+    if (!resp.ok) {
+      return { content: [{ type: "text" as const, text: `Error: ${await resp.text()}` }] };
+    }
+    displayName = display_name;
+    return { content: [{ type: "text" as const, text: `Display name updated to: ${display_name}` }] };
+  }
+
   throw new Error(`Unknown tool: ${req.params.name}`);
 });
 
@@ -252,7 +304,7 @@ mcp.setNotificationHandler(PermissionRequestSchema, async ({ params }) => {
     ws.send(
       JSON.stringify({
         type: "notify",
-        from_peer: DISPLAY_NAME,
+        from_peer: displayName,
         text:
           `🔐 Permission request: ${params.tool_name}\n` +
           `${params.description}\n\n` +
