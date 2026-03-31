@@ -325,6 +325,7 @@ def _cleanup_legacy_artifacts() -> None:
 
 def _setup_claude_code() -> None:
     """Setup for Claude Code agent type."""
+    import shutil
     import subprocess
 
     from repowire.installers.claude_code import install_channel, install_hooks
@@ -339,12 +340,12 @@ def _setup_claude_code() -> None:
         console.print(f"[yellow]![/] {channel_msg}")
         console.print("[green]✓[/] Claude Code hooks installed (legacy transport)")
 
-    # Remove existing repowire MCP server if present
-    subprocess.run(["claude", "mcp", "remove", "repowire"], capture_output=True)
-
-    cmd = ["claude", "mcp", "add", "-s", "user", "repowire", "--", "repowire", "mcp"]
-    subprocess.run(cmd, check=True)
-    console.print("[green]✓[/] MCP server added to Claude")
+    # Register legacy repowire MCP tool via CLI (only when CLI is available)
+    if shutil.which("claude"):
+        subprocess.run(["claude", "mcp", "remove", "repowire"], capture_output=True)
+        cmd = ["claude", "mcp", "add", "-s", "user", "repowire", "--", "repowire", "mcp"]
+        subprocess.run(cmd, check=True)
+        console.print("[green]✓[/] MCP server added to Claude")
 
 
 def _setup_opencode() -> None:
