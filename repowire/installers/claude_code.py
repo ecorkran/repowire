@@ -210,6 +210,8 @@ def install_channel() -> tuple[bool, str]:
         return False, "Failed to install channel dependencies."
 
     # Add to ~/.claude.json (user-level MCP config)
+    import sys
+
     try:
         config = json.loads(CLAUDE_JSON.read_text())
     except (FileNotFoundError, json.JSONDecodeError):
@@ -219,6 +221,13 @@ def install_channel() -> tuple[bool, str]:
     config["mcpServers"]["repowire-channel"] = {
         "command": "bun",
         "args": [str(server_path)],
+    }
+
+    # Also register the MCP tools server (list_peers, ask_peer, etc.)
+    repowire_bin = sys.argv[0]
+    config["mcpServers"]["repowire-mcp"] = {
+        "command": repowire_bin,
+        "args": ["mcp"],
     }
 
     CLAUDE_JSON.write_text(json.dumps(config, indent=2))

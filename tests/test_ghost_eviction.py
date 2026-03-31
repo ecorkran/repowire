@@ -29,21 +29,23 @@ def _make_peer(
     )
 
 
-def _make_manager() -> PeerRegistry:
+def _make_manager(tmp_path=None) -> PeerRegistry:
     config = Config()
     router = MagicMock()
+    persistence_path = (tmp_path / "sessions.json") if tmp_path else None
     return PeerRegistry(
         config=config,
         message_router=router,
         query_tracker=MagicMock(),
         transport=MagicMock(),
+        persistence_path=persistence_path,
     )
 
 
 class TestGhostEvictionCrossCircle:
     @pytest.fixture
-    def manager(self):
-        return _make_manager()
+    def manager(self, tmp_path):
+        return _make_manager(tmp_path)
 
     async def test_evict_ghost_cross_circle(self, manager):
         """Registering same (display_name, backend) with different circle evicts the old peer."""
