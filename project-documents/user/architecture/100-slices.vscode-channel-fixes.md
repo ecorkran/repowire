@@ -55,7 +55,7 @@ Each slice maps to a clean upstream PR branch. Slices are ordered so each is ind
 
 ## Integration Work
 
-4. [ ] **(103) End-to-End VS Code Verification** — Manual and automated verification of the full VS Code workflow: two Claude Code instances in separate VS Code windows, different projects, see each other via `list_peers`, hold ONLINE status, exchange messages via `ask_peer`, belong to configured circles. Update README or docs with VS Code setup instructions. Dependencies: [100, 101, 102]. Risk: Low. Effort: 2/5
+4. [x] **(103) End-to-End VS Code Verification** — Manual and automated verification of the full VS Code workflow: two Claude Code instances in separate VS Code windows, different projects, see each other via `list_peers`, hold ONLINE status, exchange messages via `ask_peer`, belong to configured circles. Update README or docs with VS Code setup instructions. Dependencies: [100, 101, 102]. Risk: Low. Effort: 2/5
 
    **Value:** Confirms the complete user story works. Produces documentation for other VS Code users and the upstream contribution.
 
