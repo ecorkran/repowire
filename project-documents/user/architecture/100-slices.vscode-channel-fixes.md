@@ -41,7 +41,7 @@ Each slice maps to a clean upstream PR branch. Slices are ordered so each is ind
    - New test verifies channel-style pong (with circle, without pane_alive) keeps peer ONLINE
    - WebSocket reconnection in channel works reliably (peer recovers ONLINE after brief disconnect)
 
-3. [ ] **(102) Peer Identity and Per-Project Config** — Improve display name derivation: fallback chain of `CLAUDE_SESSION_ID[:8]` → project folder name (from `cwd`). Add `set_display_name` MCP tool (expose existing `update_peer_display_name` daemon method). Implement `.repowire.yaml` per-project config file support with `circle` and `display_name` fields, loaded by `channel/server.ts` at startup. Dependencies: [100, 101]. Risk: Med. Effort: 3/5
+3. [x] **(102) Peer Identity and Per-Project Config** — Improve display name derivation: fallback chain of `CLAUDE_SESSION_ID[:8]` → project folder name (from `cwd`). Add `set_display_name` MCP tool (expose existing `update_peer_display_name` daemon method). Implement `.repowire.yaml` per-project config file support with `circle` and `display_name` fields, loaded by `channel/server.ts` at startup. Dependencies: [100, 101]. Risk: Med. Effort: 3/5
 
    **Value:** Peers have meaningful, distinguishable names. Users can configure circle and identity per-project without environment variables. Makes multi-project workflows practical.
 
