@@ -202,6 +202,7 @@ TELEGRAM_BOT_TOKEN="..." TELEGRAM_CHAT_ID="..." repowire telegram start
 | `broadcast` | Fire-and-forget | Message all online peers in your circle |
 | `whoami` | Query | Your own peer identity |
 | `set_description` | Mutation | Update your task description, visible to all peers and the dashboard |
+| `set_display_name` | Mutation | Rename yourself in the mesh — change is immediately reflected in other peers' `list_peers` |
 | `spawn_peer` | Mutation | Spawn a new agent session (requires [allowlist config](#configuration)) |
 | `kill_peer` | Mutation | Kill a previously spawned session |
 
