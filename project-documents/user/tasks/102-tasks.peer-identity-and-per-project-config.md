@@ -71,6 +71,8 @@ status: not_started
     - Permission relay handler: `from_peer: DISPLAY_NAME` → `from_peer: displayName`
   - [ ] Verify `PROJECT_PATH` is no longer needed for DISPLAY_NAME (it's used elsewhere in connect — keep it)
 
+  > **Note on test coverage:** `loadProjectConfig()` and the `displayName` fallback chain are TypeScript/Bun code. No Bun test framework exists in this project; these code paths have no automated tests here. The fallback chain (folder name, config file parsing) will be verified manually during slice 103's end-to-end pass. The rename endpoint (Task 6) exercises the daemon side of the name update.
+
 **Commit:** `feat: update display name fallback chain and add .repowire.yaml config support`
 
 ### Task 3: Add `POST /peers/{name}/rename` endpoint to `daemon/routes/peers.py`
@@ -207,6 +209,11 @@ status: not_started
     - Register `"agent1"`
     - `POST /peers/agent1/rename` with `{"display_name": "bad name!"}` (spaces/special chars)
     - Assert 422 (validation error)
+
+  - [ ] `test_rename_peer_reflected_in_list_peers`:
+    - Register `"agent1"`
+    - `POST /peers/agent1/rename` with `{"display_name": "frontend"}`
+    - `GET /peers` — assert `"frontend"` appears in the returned peer list, `"agent1"` does not
 
   - [ ] Run: `uv run pytest tests/test_routes.py -v -k rename`
 
