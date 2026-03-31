@@ -151,7 +151,8 @@ def supports_channels() -> bool:
     """Check if Claude Code supports the channel transport."""
     version = get_claude_version()
     if not version:
-        return False
+        # No CLI = VS Code extension, which always supports channels
+        return True
     return version >= CHANNEL_MIN_VERSION
 
 

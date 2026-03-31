@@ -72,8 +72,8 @@ def setup(no_service: bool, relay: bool) -> None:
 
     agents_setup: list[str] = []
 
-    # Detect and set up Claude Code if claude CLI available
-    if shutil.which("claude"):
+    # Detect and set up Claude Code: CLI present, or VS Code extension (bun available, no CLI)
+    if shutil.which("claude") or shutil.which("bun"):
         _setup_claude_code()
         agents_setup.append("claude-code")
 
