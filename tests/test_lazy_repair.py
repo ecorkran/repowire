@@ -217,6 +217,37 @@ class TestLazyRepairLiveness:
         # Should not raise
         await manager.lazy_repair()
 
+    async def test_channel_pong_with_circle_stays_online(self):
+        """Channel-style rich pong (with circle field) keeps peer ONLINE."""
+        transport = MagicMock(spec=WebSocketTransport)
+        transport.is_connected = MagicMock(return_value=True)
+        transport.ping = AsyncMock(return_value={"type": "pong", "circle": "dev"})
+        manager = _make_manager(transport=transport)
+
+        peer = _make_peer(status=PeerStatus.ONLINE, circle="dev")
+        await manager.register_peer(peer)
+
+        await manager.lazy_repair()
+
+        result = await manager.get_peer(peer.peer_id)
+        assert result.status == PeerStatus.ONLINE
+
+    async def test_circle_recovery_from_rich_pong(self):
+        """When pong returns a different circle, lazy_repair updates the peer's circle."""
+        transport = MagicMock(spec=WebSocketTransport)
+        transport.is_connected = MagicMock(return_value=True)
+        transport.ping = AsyncMock(return_value={"type": "pong", "circle": "new-circle"})
+        manager = _make_manager(transport=transport)
+
+        peer = _make_peer(status=PeerStatus.ONLINE, circle="old-circle")
+        await manager.register_peer(peer)
+
+        await manager.lazy_repair()
+
+        result = await manager.get_peer(peer.peer_id)
+        assert result.status == PeerStatus.ONLINE
+        assert result.circle == "new-circle"
+
     async def test_stale_offline_evicted_from_registry(self):
         """Stale OFFLINE peers are removed from both _peers and _mappings."""
         transport = MagicMock(spec=WebSocketTransport)
