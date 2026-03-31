@@ -66,7 +66,7 @@ function connectDaemon(mcp: Server): void {
     }
 
     if (msg.type === "ping") {
-      ws?.send(JSON.stringify({ type: "pong" }));
+      ws?.send(JSON.stringify({ type: "pong", circle: CIRCLE }));
       return;
     }
 
