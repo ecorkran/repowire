@@ -241,6 +241,25 @@ def create_mcp_server() -> FastMCP:
         return f"description updated: {description}"
 
     @mcp.tool()
+    async def set_display_name(display_name: str) -> str:
+        """Update your display name in the repowire mesh.
+
+        The new name is visible to other peers via list_peers immediately.
+        Also updates whoami and ask_peer routing for subsequent calls.
+
+        Args:
+            display_name: New display name (e.g., "frontend", "api-worker")
+
+        Returns:
+            Confirmation message
+        """
+        name = await _get_my_peer_name()
+        await daemon_request("POST", f"/peers/{name}/rename", {"display_name": display_name})
+        global _cached_peer_name
+        _cached_peer_name = display_name
+        return f"display name updated: {display_name}"
+
+    @mcp.tool()
     async def spawn_peer(path: str, command: str, circle: str = "default") -> str:
         """Spawn a new coding session for a project.
 
