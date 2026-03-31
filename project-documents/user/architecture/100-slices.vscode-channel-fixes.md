@@ -3,8 +3,8 @@ docType: slice-plan
 parent: project-documents/user/architecture/100-arch.vscode-channel-fixes.md
 project: repowire
 dateCreated: 20260326
-dateUpdated: 20260326
-status: not_started
+dateUpdated: 20260329
+status: in_progress
 ---
 
 # Slice Plan: VS Code Channel Transport Fixes
@@ -30,7 +30,7 @@ Each slice maps to a clean upstream PR branch. Slices are ordered so each is ind
 
 ## Feature Slices
 
-2. [ ] **(101) Rich Pong and Channel Liveness** — Update `channel/server.ts` to send `{"type": "pong", "circle": CIRCLE}` instead of bare `{"type": "pong"}`. Verify that `lazy_repair()` keeps channel peers ONLINE across multiple repair cycles. Investigate and fix any WebSocket stability issues causing connection drops in VS Code. Add integration-style test confirming channel pong satisfies the repair check. Dependencies: [100]. Risk: Low. Effort: 2/5
+2. [x] **(101) Rich Pong and Channel Liveness** — Update `channel/server.ts` to send `{"type": "pong", "circle": CIRCLE}` instead of bare `{"type": "pong"}`. Verify that `lazy_repair()` keeps channel peers ONLINE across multiple repair cycles. Investigate and fix any WebSocket stability issues causing connection drops in VS Code. Add integration-style test confirming channel pong satisfies the repair check. Dependencies: [100]. Risk: Low. Effort: 2/5
 
    **Value:** Fixes the core usability bug — peers no longer go offline after 30 seconds. Makes `list_peers` and `ask_peer` actually work.
 
