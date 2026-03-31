@@ -203,6 +203,33 @@ async def mark_peer_offline(
     return OfflineResponse(cancelled_queries=cancelled)
 
 
+class RenameRequest(BaseModel):
+    """Request to rename a peer's display name."""
+
+    display_name: str = Field(
+        ..., min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$",
+        description="New display name",
+    )
+
+
+@router.post("/peers/{name}/rename", response_model=OkResponse)
+async def rename_peer(
+    name: str,
+    request: RenameRequest,
+    circle: str | None = Query(None),
+    _: str | None = Depends(require_auth),
+) -> OkResponse:
+    """Rename a peer's display name in-place."""
+    peer_registry = get_peer_registry()
+    peer = await peer_registry.get_peer(name, circle=circle)
+    if not peer:
+        raise HTTPException(status_code=404, detail=f"Peer not found: {name}")
+    ok = await peer_registry.update_peer_display_name(peer.peer_id, request.display_name)
+    if not ok:
+        raise HTTPException(status_code=409, detail="Name conflict with active peer")
+    return OkResponse()
+
+
 class SetDescriptionRequest(BaseModel):
     """Request to set peer's description."""
 
