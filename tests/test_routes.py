@@ -159,6 +159,55 @@ class TestPeers:
         assert names.count("dup") == 1
 
 
+# -- Rename --
+
+
+_PEER_PAYLOAD = {
+    "name": "agent1",
+    "display_name": "agent1",
+    "path": "/tmp/test",
+    "circle": "default",
+    "backend": "claude-code",
+}
+
+
+class TestRenameEndpoint:
+    async def test_rename_peer_success(self, client):
+        await client.post("/peers", json=_PEER_PAYLOAD)
+        r = await client.post("/peers/agent1/rename", json={"display_name": "frontend"})
+        assert r.status_code == 200
+
+        r = await client.get("/peers/frontend")
+        assert r.status_code == 200
+        assert r.json()["display_name"] == "frontend"
+
+        r = await client.get("/peers/agent1")
+        assert r.status_code == 404
+
+    async def test_rename_peer_not_found(self, client):
+        r = await client.post("/peers/nonexistent/rename", json={"display_name": "frontend"})
+        assert r.status_code == 404
+
+    async def test_rename_peer_conflict(self, client):
+        await client.post("/peers", json=_PEER_PAYLOAD)
+        await client.post("/peers", json={**_PEER_PAYLOAD, "name": "agent2", "display_name": "agent2"})
+        r = await client.post("/peers/agent1/rename", json={"display_name": "agent2"})
+        assert r.status_code == 409
+
+    async def test_rename_peer_invalid_name(self, client):
+        await client.post("/peers", json=_PEER_PAYLOAD)
+        r = await client.post("/peers/agent1/rename", json={"display_name": "bad name!"})
+        assert r.status_code == 422
+
+    async def test_rename_peer_reflected_in_list_peers(self, client):
+        await client.post("/peers", json=_PEER_PAYLOAD)
+        await client.post("/peers/agent1/rename", json={"display_name": "frontend"})
+        r = await client.get("/peers")
+        names = [p["display_name"] for p in r.json()["peers"]]
+        assert "frontend" in names
+        assert "agent1" not in names
+
+
 # -- Events --
 
 
