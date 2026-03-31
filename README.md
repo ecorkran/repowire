@@ -107,6 +107,27 @@ Claude Code ←stdio→ repowire-channel (MCP) ←WebSocket→ Daemon
 - Permission relay: approve tool use remotely from Telegram or the dashboard
 - Requires claude.ai login (not available for API/Console key auth)
 
+<details>
+<summary><strong>VS Code setup</strong></summary>
+
+Claude Code in VS Code registers automatically via the channel transport — no tmux or `repowire peer new` required.
+
+1. Start the daemon: `repowire serve`
+2. Run `repowire setup` once — installs the repowire MCP server in `~/.claude.json`
+3. Open a project folder in VS Code and start Claude Code
+4. The peer registers with the project folder name as its display name
+
+To configure circle or display name per-project, add `.repowire.yaml` to the project root:
+
+```yaml
+display_name: frontend   # defaults to project folder name
+circle: myteam           # defaults to "default"
+```
+
+Multiple VS Code windows register as separate peers. Use `list_peers` in any session to see all connected peers.
+
+</details>
+
 On older Claude Code versions, repowire falls back to **hooks + tmux injection** — the original transport that uses lifecycle hooks and `tmux send-keys` for message delivery.
 
 <details>
